@@ -587,3 +587,208 @@ window.quicksettings-window {
     background-color: alpha(@error-container, 0.8);
     color: @on-error-container;
 }
+
+/* 9. Additional Detailed Subpage Styling */
+.capsule-slider.brightness-capsule highlight {
+    background-color: alpha(@surface-bright, 0.8);
+    border-radius: 9999px;
+}
+
+.footer-bat-icon {
+    color: @secondary;
+}
+
+.footer-bat-pct {
+    font-weight: 700;
+    color: @on-surface;
+}
+
+.footer-bat-rem {
+    font-size: 11px;
+    color: @on-surface-variant;
+}
+
+.footer-profile-chip {
+    background-color: @surface-container-high;
+    border-radius: 9999px;
+    padding: 3px 10px;
+}
+
+.profile-dot {
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 50%;
+    background-color: @tertiary;
+}
+
+.footer-profile-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: @on-surface;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.wifi-speed-pill {
+    background-color: alpha(@secondary, 0.15);
+    color: @secondary;
+    border-radius: 9999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.wifi-icon-primary {
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 12px;
+    background-color: @primary-container;
+    color: @on-primary-container;
+    padding: 7px;
+}
+
+.wifi-chip {
+    background-color: @surface-container-highest;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: @on-surface;
+}
+
+.wifi-sig-label {
+    color: @secondary;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.subpage-glyph-btn {
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 8px;
+    background-color: alpha(@surface-container-highest, 0.6);
+    color: @on-surface-variant;
+    border: none;
+    padding: 0;
+    transition: all 150ms ease;
+}
+
+.subpage-glyph-btn:hover {
+    background-color: @surface-container-highest;
+    color: @on-surface;
+}
+
+.subpage-text-btn {
+    background: transparent;
+    color: @on-surface-variant;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    padding: 4px 8px;
+}
+
+.subpage-text-btn:hover {
+    color: @error;
+}
+
+.subpage-full-btn {
+    background-color: alpha(@surface-container-high, 0.6);
+    border-radius: 12px;
+    padding: 10px 14px;
+    border: none;
+    color: @on-surface;
+    transition: all 150ms ease;
+}
+
+.subpage-full-btn:hover {
+    background-color: @surface-container-highest;
+}
+
+.wifi-footer-text {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: @on-surface-variant;
+}
+
+.bt-broadcast-chip {
+    color: @secondary;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.bt-codec-chip {
+    background-color: alpha(@surface-container-highest, 0.8);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: @primary;
+}
+
+.bt-battery-pill {
+    background-color: alpha(@secondary, 0.15);
+    border-radius: 9999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: @secondary;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.bt-telem-box {
+    background-color: alpha(@surface-container-low, 0.7);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+.bt-wave-bar trough {
+    min-height: 4px;
+    border-radius: 9999px;
+    background-color: alpha(@surface-container-highest, 0.4);
+    border: none;
+}
+
+.bt-wave-bar progress {
+    min-height: 4px;
+    border-radius: 9999px;
+    background-color: @secondary;
+    border: none;
+}
+
+.vpn-rate-label {
+    font-size: 10px;
+    color: @secondary;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.vpn-rate-label-blue {
+    font-size: 10px;
+    color: @primary;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.vpn-ping-label {
+    font-size: 10px;
+    color: @tertiary;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.vpn-sparkline-box {
+    background-color: alpha(@surface-container-low, 0.5);
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+
+.vpn-spark-bar trough {
+    min-height: 4px;
+    border-radius: 9999px;
+    background-color: alpha(@surface-container-highest, 0.3);
+    border: none;
+}
+
+.vpn-spark-bar progress {
+    min-height: 4px;
+    border-radius: 9999px;
+    background-color: @secondary;
+    border: none;
+}

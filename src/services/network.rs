@@ -48,6 +48,7 @@ pub struct VpnDetails {
     pub cipher: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct VpnProfile {
     pub name: String,

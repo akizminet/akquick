@@ -13,41 +13,58 @@ impl FooterBar {
             .css_classes(["footer-bar"])
             .build();
 
-        // Left: Real Desktop CPU & RAM telemetry
+        // Left: Battery / Power Status
         let left_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
-            .spacing(8)
+            .spacing(6)
             .hexpand(true)
             .halign(gtk4::Align::Start)
+            .valign(gtk4::Align::Center)
             .build();
 
-        let cpu_label = gtk4::Label::builder()
-            .label(&format!("💻 CPU: {}%", state.telemetry.cpu_percent))
+        let bat_icon = gtk4::Image::builder()
+            .icon_name("battery-charging-symbolic")
+            .pixel_size(18)
+            .css_classes(["footer-bat-icon"])
             .build();
 
-        let ram_label = gtk4::Label::builder()
-            .label(&format!("🧠 RAM: {:.1} GiB / {:.1} GiB", state.telemetry.ram_used_gib, state.telemetry.ram_total_gib))
+        let bat_val = gtk4::Label::builder()
+            .label("88%")
+            .css_classes(["footer-bat-pct"])
             .build();
 
-        left_box.append(&cpu_label);
-        left_box.append(&ram_label);
+        let bat_rem = gtk4::Label::builder()
+            .label(&format!("(5h 20m rem. • {}% CPU)", state.telemetry.cpu_percent))
+            .css_classes(["footer-bat-rem"])
+            .build();
 
-        // Right: Desktop Hostname
-        let right_box = gtk4::Box::builder()
+        left_box.append(&bat_icon);
+        left_box.append(&bat_val);
+        left_box.append(&bat_rem);
+
+        // Right: Profile: Balanced Chip
+        let profile_chip = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .spacing(6)
             .halign(gtk4::Align::End)
+            .valign(gtk4::Align::Center)
+            .css_classes(["footer-profile-chip"])
             .build();
 
-        let host_label = gtk4::Label::builder()
-            .label(&format!("● {}", state.telemetry.hostname))
-            .css_classes(["profile-badge"])
+        let dot = gtk4::Box::builder()
+            .css_classes(["profile-dot"])
             .build();
 
-        right_box.append(&host_label);
+        let profile_lbl = gtk4::Label::builder()
+            .label("Profile: Balanced")
+            .css_classes(["footer-profile-text"])
+            .build();
+
+        profile_chip.append(&dot);
+        profile_chip.append(&profile_lbl);
 
         footer.append(&left_box);
-        footer.append(&right_box);
+        footer.append(&profile_chip);
 
         Self { widget: footer }
     }

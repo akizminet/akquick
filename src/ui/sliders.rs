@@ -14,14 +14,13 @@ impl SlidersSection {
             .build();
 
         // =========================================================================
-        // 1. Output Volume Continuous Capsule Slider (HTML Lines 158-180)
+        // 1. Sound Output Capsule Slider + Quick Mute Button (HTML Lines 149-180)
         // =========================================================================
         let output_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Vertical)
             .spacing(6)
             .build();
 
-        // Header: "Sound Output" (Left) and Device Switcher Chip (Right)
         let output_header = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .hexpand(true)
@@ -60,7 +59,13 @@ impl SlidersSection {
         output_header.append(&output_title);
         output_header.append(&output_chip);
 
-        // Continuous Capsule Slider with internal overlay
+        // Sound Output Row: Capsule Slider + Circular Mute Button
+        let output_row = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .spacing(8)
+            .valign(gtk4::Align::Center)
+            .build();
+
         let output_overlay = gtk4::Overlay::builder()
             .hexpand(true)
             .build();
@@ -76,7 +81,7 @@ impl SlidersSection {
             .hexpand(true)
             .valign(gtk4::Align::Center)
             .css_classes(["capsule-overlay-content"])
-            .can_target(false) // clicks pass through to the scale underneath!
+            .can_target(false)
             .build();
 
         let output_left = gtk4::Box::builder()
@@ -124,8 +129,26 @@ impl SlidersSection {
         output_overlay.set_child(Some(&output_scale));
         output_overlay.add_overlay(&output_overlay_content);
 
+        // Circular Output Mute Button (HTML lines 173-176)
+        let output_mute_btn = gtk4::Button::builder()
+            .icon_name(if state.audio.volume_muted {
+                "audio-volume-muted-symbolic"
+            } else {
+                "audio-volume-high-symbolic"
+            })
+            .tooltip_text("Mute Output")
+            .css_classes(["quick-mute-btn"])
+            .build();
+
+        output_mute_btn.connect_clicked(|_| {
+            AudioService::toggle_volume_mute();
+        });
+
+        output_row.append(&output_overlay);
+        output_row.append(&output_mute_btn);
+
         output_box.append(&output_header);
-        output_box.append(&output_overlay);
+        output_box.append(&output_row);
 
         // =========================================================================
         // 2. Mic Input Live VU Bar Capsule Slider (HTML Lines 181-208)
@@ -177,7 +200,7 @@ impl SlidersSection {
         mic_header.append(&mic_title);
         mic_header.append(&mic_chip);
 
-        // Capsule Slider + Quick Mute Button Row
+        // Mic Row: Capsule Slider + Quick Mute Button
         let mic_row = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .spacing(8)
@@ -273,8 +296,77 @@ impl SlidersSection {
         mic_box.append(&mic_header);
         mic_box.append(&mic_row);
 
+        // =========================================================================
+        // 3. Display Brightness Capsule Slider (HTML Lines 209-223)
+        // =========================================================================
+        let display_box = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .spacing(4)
+            .margin_top(4)
+            .build();
+
+        let display_overlay = gtk4::Overlay::builder()
+            .hexpand(true)
+            .build();
+
+        let display_scale = gtk4::Scale::with_range(gtk4::Orientation::Horizontal, 0.0, 100.0, 1.0);
+        display_scale.set_value(85.0);
+        display_scale.set_hexpand(true);
+        display_scale.set_draw_value(false);
+        display_scale.add_css_class("capsule-slider");
+        display_scale.add_css_class("brightness-capsule");
+
+        let display_overlay_content = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .hexpand(true)
+            .valign(gtk4::Align::Center)
+            .css_classes(["capsule-overlay-content"])
+            .can_target(false)
+            .build();
+
+        let display_left = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .spacing(8)
+            .hexpand(true)
+            .halign(gtk4::Align::Start)
+            .build();
+
+        let display_icon = gtk4::Image::builder()
+            .icon_name("display-brightness-symbolic")
+            .pixel_size(18)
+            .build();
+
+        let display_desc = gtk4::Label::builder()
+            .label("Studio Display 5K")
+            .css_classes(["capsule-label"])
+            .build();
+
+        display_left.append(&display_icon);
+        display_left.append(&display_desc);
+
+        let display_pct = gtk4::Label::builder()
+            .label("85%")
+            .halign(gtk4::Align::End)
+            .css_classes(["capsule-percentage"])
+            .build();
+
+        display_overlay_content.append(&display_left);
+        display_overlay_content.append(&display_pct);
+
+        let disp_pct_clone = display_pct.clone();
+        display_scale.connect_value_changed(move |s| {
+            let val = s.value();
+            disp_pct_clone.set_label(&format!("{}%", val.round() as u32));
+        });
+
+        display_overlay.set_child(Some(&display_scale));
+        display_overlay.add_overlay(&display_overlay_content);
+
+        display_box.append(&display_overlay);
+
         tray.append(&output_box);
         tray.append(&mic_box);
+        tray.append(&display_box);
 
         Self { widget: tray }
     }
