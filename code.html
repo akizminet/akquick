@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"secondary-container":"#00af6d","inverse-primary":"#005eb2","on-background":"#e4e1ea","on-surface-variant":"#c1c6d4","surface-tint":"#a7c8ff","on-secondary":"#003920","outline":"#8b919e","primary-fixed-dim":"#a7c8ff","surface-container-highest":"#34343b","on-tertiary-fixed":"#241a00","secondary":"#53df98","on-primary-fixed":"#001b3c","secondary-fixed":"#73fcb2","inverse-surface":"#e4e1ea","on-secondary-fixed":"#002111","on-tertiary-container":"#503d00","on-tertiary-fixed-variant":"#584400","surface-dim":"#131319","on-tertiary":"#3d2e00","on-primary":"#003061","on-error":"#690005","tertiary-container":"#d2a600","surface-bright":"#39383f","surface-container-lowest":"#0d0e13","secondary-fixed-dim":"#53df98","tertiary":"#f3c00d","error-container":"#93000a","tertiary-fixed-dim":"#f3c00c","inverse-on-surface":"#303036","on-error-container":"#ffdad6","surface-container-high":"#2a2930","background":"#131319","outline-variant":"#414752","on-surface":"#e4e1ea","on-primary-container":"#002a55","primary-container":"#4691f2","primary":"#a7c8ff","on-primary-fixed-variant":"#004788","surface-container":"#1f1f25","surface-variant":"#34343b","primary-fixed":"#d5e3ff","surface":"#131319","error":"#ffb4ab","surface-container-low":"#1b1b21","on-secondary-fixed-variant":"#005231","on-secondary-container":"#003920","tertiary-fixed":"#ffdf90"},"borderRadius":{"DEFAULT":"0.25rem","lg":"0.5rem","xl":"0.75rem","full":"9999px"},"spacing":{"space-lg":"1rem","space-md":"0.75rem","space-xs":"0.25rem","space-xl":"1.5rem","gutter":"0.75rem","gutter-desktop":"1rem","space-sm":"0.5rem","margin":"1rem","margin-desktop":"1.5rem"},"fontFamily":{"body-sm":["Inter"],"headline-lg":["Inter"],"headline-md":["Inter"],"title-sm":["Inter"],"body-md":["Inter"],"label-lg":["Inter"],"body-lg":["Inter"],"display":["Inter"],"label-md":["Inter"],"label-mono":["JetBrains Mono"]},"fontSize":{"body-sm":["0.75rem",{"lineHeight":"1rem","fontWeight":"400"}],"headline-lg":["1.5rem",{"lineHeight":"2rem","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-md":["1.25rem",{"lineHeight":"1.75rem","letterSpacing":"-0.01em","fontWeight":"600"}],"title-sm":["1rem",{"lineHeight":"1.5rem","letterSpacing":"-0.005em","fontWeight":"600"}],"body-md":["0.875rem",{"lineHeight":"1.25rem","fontWeight":"400"}],"label-lg":["0.875rem",{"lineHeight":"1.25rem","fontWeight":"500"}],"body-lg":["1rem",{"lineHeight":"1.5rem","fontWeight":"400"}],"display":["2rem",{"lineHeight":"2.5rem","letterSpacing":"-0.02em","fontWeight":"700"}],"label-md":["0.75rem",{"lineHeight":"1rem","letterSpacing":"0.02em","fontWeight":"600"}],"label-mono":["0.75rem",{"lineHeight":"1rem","letterSpacing":"0","fontWeight":"500"}]}}}};</script></head><body class="bg-surface font-body-md text-on-surface min-h-screen selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 inset-x-0 h-10 z-50 bg-surface-container-lowest/90 backdrop-blur-md flex items-center justify-between px-space-md shadow-[0_1px_8px_rgba(0,0,0,0.45)]"><div class="flex items-center gap-space-sm"><button class="h-7 px-space-md rounded-full bg-surface-container-high/80 hover:bg-surface-container-highest text-on-surface font-label-md text-label-md flex items-center transition-colors">Activities</button><nav class="hidden md:flex items-center gap-1" data-active-classes="bg-surface-container-highest text-on-surface rounded-full"><a class="px-3 py-1 rounded-full text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors" data-path="desktop-workspace" href="#">Workspace</a><a aria-current="page" class="px-3 py-1 font-label-md transition-colors bg-surface-container-highest text-on-surface rounded-full" data-path="quick-settings-popover" href="#">Quick Settings</a><a class="px-3 py-1 rounded-full text-on-surface-variant hover:text-on-surface font-label-md text-label-md transition-colors" data-path="system-monitor" href="#">System Monitor</a></nav></div><div class="flex items-center justify-center"><button class="h-7 px-space-md rounded-full hover:bg-surface-container-highest/60 text-on-surface font-label-md text-label-md transition-colors">Wed Oct 25  14:32</button></div><div class="flex items-center gap-space-sm"><div class="flex items-center gap-space-xs h-7 px-space-md rounded-full bg-surface-container-high/80 hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"><span class="material-symbols-outlined text-[16px]">wifi</span><span class="material-symbols-outlined text-[16px]">bluetooth</span><span class="material-symbols-outlined text-[16px]">volume_up</span><span class="material-symbols-outlined text-[16px] text-secondary">battery_horiz_075</span><span class="font-label-mono text-label-mono text-on-surface ml-0.5">88%</span><span class="material-symbols-outlined text-[14px] ml-1">expand_more</span></div><div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[16px]">person</span></div></div></header><main class="w-full pt-10 min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-surface-container-low via-surface to-surface-container-lowest"><div class="flex flex-col w-full relative select-none">
+<!-- Desktop Environment Wallpaper Canvas -->
+<div class="relative w-full h-[960px] overflow-hidden bg-surface-container-lowest flex flex-col justify-between">
+<!-- Atmospheric Wallpaper Layer -->
+<div class="absolute inset-0 bg-cover bg-center opacity-40 mix-blend-screen pointer-events-none scale-105" data-alt="Deep moody minimalist Nordic landscape at late twilight with dark jagged basalt mountain silhouettes against a subtle gradient sky of deep indigo, obsidian, and faint bioluminescent cyan mist. 4k resolution wallpaper for modern Linux desktop, ultra crisp, cinematic atmosphere." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAFrzW4vgXxwEMR9udHfsIfbFGuaaTy08aeNv3lGlmpyH3N2cqs9-9aju0L4iC6a_PcIt--_mIA-MsvPrUwrYfWYbMIPjs2ZgYjC06MZDgazBz8KnKeiqOCL24aukMAMD9m-O_3NsVhztLUurnCt28EOx6YzzbT8bVR4f3EqxcvxvqrbiatuvfOT4MMFh3y7seKRY8GuOSwzauWJFuiQciAXUVAMpjjft2A7Li9mg7oiTdmWuH0ZkBn')">
+</div>
+<!-- Live Desktop Workspace Decorative Layer -->
+<div class="relative z-10 w-full px-space-xl pt-space-xl flex justify-between items-start pointer-events-none">
+<!-- Desktop Conky / Telemetry Widget -->
+<div class="hidden lg:flex flex-col gap-space-sm bg-surface-container-low/70 backdrop-blur-md p-space-lg rounded-xl shadow-xl max-w-sm pointer-events-auto">
+<div class="flex items-center justify-between pb-space-xs">
+<div class="flex items-center gap-space-xs">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary animate-pulse"></span>
+<span class="font-label-mono text-label-mono text-on-surface font-semibold tracking-wider uppercase">Kernel 6.6.9-zen1</span>
+</div>
+<span class="font-label-mono text-label-mono text-on-surface-variant">Arch Linux</span>
+</div>
+<div class="grid grid-cols-2 gap-space-sm font-label-mono text-label-mono pt-space-xs">
+<div class="bg-surface-container-high/60 p-space-xs rounded-lg">
+<span class="text-on-surface-variant block text-[10px]">CPU RYZEN 9</span>
+<div class="flex items-baseline justify-between mt-1">
+<span class="text-secondary font-semibold">14.2%</span>
+<span class="text-on-surface-variant text-[10px]">48°C</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 14%;"></div>
+</div>
+</div>
+<div class="bg-surface-container-high/60 p-space-xs rounded-lg">
+<span class="text-on-surface-variant block text-[10px]">RAM ECC DDR5</span>
+<div class="flex items-baseline justify-between mt-1">
+<span class="text-primary font-semibold">18.4 GB</span>
+<span class="text-on-surface-variant text-[10px]">64G</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full mt-1.5 overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 28%;"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Quick Settings Popover Floating Menu Anchor Container -->
+<div class="w-full max-w-[420px] ml-auto relative pointer-events-auto">
+<!-- Floating Dropdown Shadow Panel (Level 3 Elevation Popover) -->
+<div class="w-full bg-surface-container/90 backdrop-blur-2xl rounded-xl shadow-[0_24px_64px_rgba(0,0,0,0.7),0_2px_8px_rgba(0,0,0,0.5)] p-space-md flex flex-col gap-space-md text-on-surface transition-all">
+<!-- 1. Top Controls Bar -->
+<div class="flex items-center justify-between bg-surface-container-high/70 p-space-xs rounded-xl shadow-sm">
+<div class="flex items-center gap-space-xs">
+<!-- Screenshot / Screen Record Button -->
+<button class="w-9 h-9 rounded-lg bg-surface-container-highest/60 hover:bg-surface-container-highest flex items-center justify-center text-on-surface transition-all active:scale-95" title="Take Screenshot or Screen Recording">
+<span class="material-symbols-outlined text-[18px]">photo_camera</span>
+</button>
+<!-- Settings Gear Button -->
+<button class="w-9 h-9 rounded-lg bg-surface-container-highest/60 hover:bg-surface-container-highest flex items-center justify-center text-on-surface transition-all active:scale-95" title="Settings &amp; Control Center">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+</button>
+</div>
+<div class="flex items-center gap-space-xs">
+<!-- Lock Screen Button -->
+<button class="w-9 h-9 rounded-lg bg-surface-container-highest/60 hover:bg-surface-container-highest flex items-center justify-center text-on-surface transition-all active:scale-95" title="Lock Session">
+<span class="material-symbols-outlined text-[18px]">lock</span>
+</button>
+<!-- Power / Restart Trigger -->
+<button class="w-9 h-9 rounded-lg bg-error-container/80 hover:bg-error-container text-on-error-container flex items-center justify-center transition-all active:scale-95" id="power-btn" title="Power Menu">
+<span class="material-symbols-outlined text-[18px]">power_settings_new</span>
+</button>
+</div>
+</div>
+<!-- 2. Master Quick Toggle 2-column Grid -->
+<div class="grid grid-cols-2 gap-space-sm">
+<!-- Wi-Fi (Active Primary Pill with Drawer Toggle) -->
+<div class="group h-14 bg-primary-container text-on-primary-container rounded-xl flex items-center shadow-sm overflow-hidden transition-all">
+<button class="flex-1 h-full flex items-center gap-2.5 px-3 min-w-0 hover:bg-white/10 text-left transition-colors">
+<span class="material-symbols-outlined text-[20px] shrink-0" style="font-variation-settings: 'FILL' 1;">wifi</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md truncate leading-tight font-semibold">Wi-Fi</span>
+<span class="font-label-mono text-[11px] truncate opacity-90 leading-tight">ArchNet_5G-Ext</span>
+</div>
+</button>
+<button class="h-full w-8 flex items-center justify-center hover:bg-white/20 transition-colors shrink-0" id="wifi-sub-trigger" title="Available Networks">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+<!-- Bluetooth (Active Primary Pill with Drawer Toggle) -->
+<div class="group h-14 bg-primary-container text-on-primary-container rounded-xl flex items-center shadow-sm overflow-hidden transition-all">
+<button class="flex-1 h-full flex items-center gap-2.5 px-3 min-w-0 hover:bg-white/10 text-left transition-colors">
+<span class="material-symbols-outlined text-[20px] shrink-0">bluetooth</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md truncate leading-tight font-semibold">Bluetooth</span>
+<span class="font-label-mono text-[11px] truncate opacity-90 leading-tight">3 Connected</span>
+</div>
+</button>
+<button class="h-full w-8 flex items-center justify-center hover:bg-white/20 transition-colors shrink-0" title="Paired Devices">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+<!-- Do Not Disturb (Dark Pill Inactive) -->
+<button class="h-14 bg-surface-container-high/70 hover:bg-surface-container-highest text-on-surface rounded-xl flex items-center gap-2.5 px-3 shadow-sm transition-all text-left">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">notifications_paused</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md truncate leading-tight font-semibold">Do Not Disturb</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate leading-tight">Off</span>
+</div>
+</button>
+<!-- Night Light (Active Amber / Tertiary Pill) -->
+<button class="h-14 bg-tertiary-container text-on-tertiary-container rounded-xl flex items-center gap-2.5 px-3 shadow-sm hover:brightness-105 transition-all text-left">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">bedtime</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md truncate leading-tight font-semibold">Night Light</span>
+<span class="font-label-mono text-[11px] truncate opacity-90 leading-tight">4000K Warm</span>
+</div>
+</button>
+<!-- Mic Mute (Dark Pill with Active indicator) -->
+<button class="h-14 bg-surface-container-high/70 hover:bg-surface-container-highest text-on-surface rounded-xl flex items-center gap-2.5 px-3 shadow-sm transition-all text-left relative">
+<span class="material-symbols-outlined text-[20px] text-secondary">mic</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md truncate leading-tight font-semibold">Microphone</span>
+<span class="font-body-sm text-body-sm text-secondary truncate leading-tight flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary inline-block"></span> Unmuted
+                </span>
+</div>
+</button>
+<!-- WireGuard VPN (Active Secondary Pill) -->
+<div class="group h-14 bg-secondary-container text-on-secondary-container rounded-xl flex items-center shadow-sm overflow-hidden transition-all">
+<button class="flex-1 h-full flex items-center gap-2.5 px-3 min-w-0 hover:bg-white/10 text-left transition-colors">
+<span class="material-symbols-outlined text-[20px] shrink-0" style="font-variation-settings: 'FILL' 1;">vpn_key</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md truncate leading-tight font-semibold">WireGuard</span>
+<span class="font-label-mono text-[11px] truncate opacity-90 leading-tight">Zurich-01</span>
+</div>
+</button>
+<button class="h-full w-8 flex items-center justify-center hover:bg-white/20 transition-colors shrink-0" title="VPN Servers">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+<!-- Battery Saver (Dark Pill Inactive) -->
+<button class="h-14 bg-surface-container-high/70 hover:bg-surface-container-highest text-on-surface rounded-xl flex items-center gap-2.5 px-3 shadow-sm transition-all text-left">
+<span class="material-symbols-outlined text-[20px] text-on-surface-variant">energy_savings_leaf</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md truncate leading-tight font-semibold">Power Mode</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate leading-tight">Balanced</span>
+</div>
+</button>
+<!-- Dark Style (Active Pill) -->
+<button class="h-14 bg-surface-container-highest text-on-surface rounded-xl flex items-center gap-2.5 px-3 shadow-sm hover:brightness-110 transition-all text-left">
+<span class="material-symbols-outlined text-[20px] text-primary" style="font-variation-settings: 'FILL' 1;">dark_mode</span>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md truncate leading-tight font-semibold">Dark Style</span>
+<span class="font-body-sm text-body-sm text-primary truncate leading-tight font-medium">Dark Active</span>
+</div>
+</button>
+</div>
+<!-- 3. Sliders & Device Controls Capsule Tray -->
+<div class="flex flex-col gap-space-sm bg-surface-container-high/60 p-space-sm rounded-xl">
+<!-- Output Volume Continuous Capsule Slider -->
+<div class="flex flex-col gap-1.5">
+<div class="flex items-center justify-between text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-on-surface font-semibold">Sound Output</span>
+</div>
+<!-- Device Output Switcher -->
+<button class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-primary font-label-mono text-label-mono transition-colors">
+<span>Focusrite DAC</span>
+<span class="material-symbols-outlined text-[14px]">arrow_drop_down</span>
+</button>
+</div>
+<div class="relative w-full h-10 bg-surface-container-lowest rounded-full overflow-hidden flex items-center px-3 cursor-pointer group">
+<!-- Interactive Track Level -->
+<div class="absolute left-0 top-0 bottom-0 bg-primary/30 group-hover:bg-primary/40 rounded-full transition-all" id="volume-fill" style="width: 72%;"></div>
+<div class="relative z-10 w-full flex items-center justify-between pointer-events-none">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-primary">volume_up</span>
+<span class="font-label-mono text-label-mono text-on-surface font-semibold">Analog 1/2</span>
+</div>
+<span class="font-label-mono text-label-mono text-primary font-bold">72%</span>
+</div>
+</div>
+</div>
+<!-- Mic Input Live VU Bar Capsule Slider -->
+<div class="flex flex-col gap-1.5 pt-1">
+<div class="flex items-center justify-between text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-on-surface font-semibold">Input Level</span>
+</div>
+<button class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-secondary font-label-mono text-label-mono transition-colors">
+<span>Shure MV7 USB</span>
+<span class="material-symbols-outlined text-[14px]">mic_external_on</span>
+</button>
+</div>
+<div class="flex items-center gap-2">
+<div class="relative flex-1 h-9 bg-surface-container-lowest rounded-full overflow-hidden flex items-center px-3 cursor-pointer">
+<!-- Live Level VU representation -->
+<div class="absolute left-0 top-0 bottom-0 bg-secondary/30 rounded-full" style="width: 65%;"></div>
+<div class="relative z-10 w-full flex items-center justify-between pointer-events-none">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[17px] text-secondary">graphic_eq</span>
+<span class="font-label-mono text-label-mono text-on-surface-variant">Gain Boost</span>
+</div>
+<span class="font-label-mono text-label-mono text-secondary font-semibold">65%</span>
+</div>
+</div>
+<button class="w-9 h-9 rounded-full bg-surface-container hover:bg-surface-container-highest flex items-center justify-center text-on-surface transition-colors shrink-0" title="Quick Mute Mic">
+<span class="material-symbols-outlined text-[18px]">mic_none</span>
+</button>
+</div>
+</div>
+<!-- Display Brightness Slider -->
+<div class="flex flex-col gap-1.5 pt-1">
+<div class="relative w-full h-9 bg-surface-container-lowest rounded-full overflow-hidden flex items-center px-3 cursor-pointer group">
+<div class="absolute left-0 top-0 bottom-0 bg-on-surface/20 group-hover:bg-on-surface/30 rounded-full transition-all" style="width: 85%;"></div>
+<div class="relative z-10 w-full flex items-center justify-between pointer-events-none">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface">brightness_high</span>
+<span class="font-label-mono text-label-mono text-on-surface">Studio Display 5K</span>
+</div>
+<span class="font-label-mono text-label-mono text-on-surface font-semibold">85%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 4. Media Player Mini-Widget -->
+<div class="relative w-full bg-surface-container-high/80 rounded-xl p-space-sm flex flex-col gap-space-xs overflow-hidden shadow-sm">
+<div class="flex items-center gap-space-sm">
+<!-- Album Artwork Placeholder -->
+<div class="w-12 h-12 rounded-lg bg-surface-container-lowest shrink-0 overflow-hidden relative shadow">
+<img class="w-full h-full object-cover" data-alt="Album cover art featuring abstract glowing amber and deep blue digital solar flares, generative ambient synth visual style, smooth minimalist aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAukcvvL09u8oGT_CjJkcZFJgdbgheWwVOdVntHUllEajPDiLFxhF_lY-L2gCoGNlhceSICNlYABjMZZlstgwCCFhVMzY7l1zEASzZnZmYR8WN3eaD5ltL3Opksrh3YThRcHwVA00o6HGuKuAyajreogcFnj5oWasKD21L7_C5vgeZisjMM96CJLwTAGOg08UUoWVU2-RFj3ka8Yx6N84_2DzTHgy2wYZXiUgPOKYE2xLnVicWhW4Ij"/>
+</div>
+<!-- Metadata -->
+<div class="flex flex-col min-w-0 flex-1">
+<span class="font-title-sm text-title-sm text-on-surface font-semibold truncate leading-snug">Solaris</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate leading-none mt-0.5">Carbon Based Lifeforms</span>
+<span class="font-label-mono text-[10px] text-primary/80 mt-1 uppercase tracking-wider flex items-center gap-1">
+<span class="w-1 h-1 rounded-full bg-primary inline-block"></span> Spotify Wayland MPRIS
+                </span>
+</div>
+<!-- Media Playback Buttons -->
+<div class="flex items-center gap-1">
+<button class="w-8 h-8 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[18px]">skip_previous</span>
+</button>
+<button class="w-9 h-9 rounded-full bg-primary text-on-primary hover:bg-primary/90 flex items-center justify-center transition-all shadow active:scale-95" id="play-pause-btn">
+<span class="material-symbols-outlined text-[20px]" id="play-icon" style="font-variation-settings: 'FILL' 1;">pause</span>
+</button>
+<button class="w-8 h-8 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[18px]">skip_next</span>
+</button>
+</div>
+</div>
+<!-- Scrub Track Progress -->
+<div class="flex items-center gap-2 pt-1 font-label-mono text-[10px] text-on-surface-variant">
+<span>03:42</span>
+<div class="relative flex-1 h-1.5 bg-surface-container-lowest rounded-full overflow-hidden cursor-pointer group">
+<div class="h-full bg-primary rounded-full transition-all" style="width: 58%;"></div>
+</div>
+<span>06:21</span>
+</div>
+</div>
+<!-- 5. Bottom Status Footer & Power Telemetry -->
+<div class="flex items-center justify-between pt-1 border-t-0 text-on-surface-variant font-label-mono text-label-mono px-1">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-secondary">battery_charging_80</span>
+<div class="flex items-center gap-1 text-on-surface font-semibold">
+<span>88%</span>
+<span class="text-on-surface-variant font-normal text-[11px]">(5h 20m rem.)</span>
+</div>
+</div>
+<div class="flex items-center gap-1.5 bg-surface-container-high px-2.5 py-1 rounded-full">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="text-on-surface text-[11px] font-medium">Profile: Balanced</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Active Open Application In Background (Terminal with Neofetch / Glances) -->
+<div class="relative z-0 max-w-2xl ml-space-xl mb-space-xl hidden md:block">
+<div class="w-full bg-surface-container-lowest/85 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden pointer-events-none">
+<!-- Terminal Headerbar (CSD) -->
+<div class="h-9 bg-surface-container-low px-space-md flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<div class="w-3 h-3 rounded-full bg-error/80"></div>
+<div class="w-3 h-3 rounded-full bg-tertiary/80"></div>
+<div class="w-3 h-3 rounded-full bg-secondary/80"></div>
+</div>
+<span class="font-label-mono text-[11px] text-on-surface-variant">alacritty: fish ~ /home/alex</span>
+<div class="w-12"></div>
+</div>
+<!-- Terminal Prompt Body -->
+<div class="p-space-md font-label-mono text-[12px] text-on-surface leading-relaxed flex flex-col gap-1">
+<div class="text-primary font-semibold">alex@obsidian-workstation <span class="text-on-surface-variant">~&gt;</span> neofetch</div>
+<div class="grid grid-cols-2 gap-4 mt-2 text-on-surface-variant text-[11px]">
+<div>
+<p class="text-secondary">OS: <span class="text-on-surface">Arch Linux x86_64</span></p>
+<p class="text-secondary">Host: <span class="text-on-surface">Precision 5820 Tower</span></p>
+<p class="text-secondary">Kernel: <span class="text-on-surface">6.6.9-zen1-1-zen</span></p>
+<p class="text-secondary">Uptime: <span class="text-on-surface">9 days, 4 hours</span></p>
+<p class="text-secondary">Packages: <span class="text-on-surface">1422 (pacman), 18 (flatpak)</span></p>
+</div>
+<div>
+<p class="text-primary">WM: <span class="text-on-surface">Wayland (Sway / GNOME 45)</span></p>
+<p class="text-primary">Theme: <span class="text-on-surface">Adwaita-Dark [GTK4]</span></p>
+<p class="text-primary">Terminal: <span class="text-on-surface">Alacritty 0.13</span></p>
+<p class="text-primary">CPU: <span class="text-on-surface">AMD Ryzen 9 7950X (32) @ 5.88GHz</span></p>
+<p class="text-primary">GPU: <span class="text-on-surface">Radeon RX 7900 XTX 24GB</span></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Desktop Workspace App Dock / Shell Bottom Elements -->
+<div class="w-full flex items-center justify-center pb-space-md pointer-events-none">
+<div class="bg-surface-container-lowest/80 backdrop-blur-xl p-1.5 rounded-2xl flex items-center gap-2 shadow-2xl pointer-events-auto">
+<button class="w-11 h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-primary transition-all hover:-translate-y-1">
+<span class="material-symbols-outlined text-[24px]">terminal</span>
+</button>
+<button class="w-11 h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-secondary transition-all hover:-translate-y-1">
+<span class="material-symbols-outlined text-[24px]">folder</span>
+</button>
+<button class="w-11 h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-on-surface transition-all hover:-translate-y-1">
+<span class="material-symbols-outlined text-[24px]">public</span>
+</button>
+<button class="w-11 h-11 rounded-xl bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-tertiary transition-all hover:-translate-y-1">
+<span class="material-symbols-outlined text-[24px]">code</span>
+</button>
+<div class="w-[1px] h-6 bg-surface-container-highest mx-0.5"></div>
+<button class="w-11 h-11 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center transition-all hover:-translate-y-1">
+<span class="material-symbols-outlined text-[24px]">apps</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+    // Audio Play/Pause interactive toggle
+    const playBtn = document.getElementById('play-pause-btn');
+    const playIcon = document.getElementById('play-icon');
+    let isPlaying = true;
+
+    if (playBtn && playIcon) {
+      playBtn.addEventListener('click', () => {
+        isPlaying = !isPlaying;
+        playIcon.textContent = isPlaying ? 'pause' : 'play_arrow';
+      });
+    }
+
+    // Volume fill micro-interaction simulation
+    const volumeFill = document.getElementById('volume-fill');
+    if (volumeFill) {
+      volumeFill.parentElement.addEventListener('click', (e) => {
+        const rect = volumeFill.parentElement.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const percentage = Math.max(10, Math.min(100, Math.round((clickX / rect.width) * 100)));
+        volumeFill.style.width = percentage + '%';
+        const label = volumeFill.parentElement.querySelector('.text-primary.font-bold');
+        if (label) label.textContent = percentage + '%';
+      });
+    }
+  </script>
+</div></main><footer class="w-full bg-surface-container-lowest/80 backdrop-blur-md py-3 border-t border-outline-variant/10"><div class="max-w-7xl mx-auto px-space-md flex items-center justify-between text-on-surface-variant font-label-mono text-label-mono"><span>Linux Desktop Architecture • Wayland Compositor Active</span><span>GNOME 45 • Adwaita Dark</span></div></footer></body></html>
