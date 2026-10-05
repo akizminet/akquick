@@ -46,6 +46,13 @@ impl App {
         app.connect_command_line(move |app, cmd| {
             let args = cmd.arguments();
             let has_toggle = args.iter().any(|arg| arg == "--toggle" || arg == "-t");
+            let page_target = args.windows(2).find_map(|w| {
+                if w[0] == "--page" || w[0] == "-p" {
+                    Some(w[1].to_str().unwrap_or("main").to_string())
+                } else {
+                    None
+                }
+            });
 
             if let Some(display) = gdk::Display::default() {
                 let provider = gtk4::CssProvider::new();
@@ -60,10 +67,16 @@ impl App {
             let mut wh = wh_cmd.borrow_mut();
             if wh.is_none() {
                 let win = QuickSettingsWindow::new(app);
-                win.window.present();
+                if let Some(ref target) = page_target {
+                    win.open_page(target);
+                } else {
+                    win.window.present();
+                }
                 *wh = Some(win);
             } else if let Some(ref win) = *wh {
-                if has_toggle {
+                if let Some(ref target) = page_target {
+                    win.open_page(target);
+                } else if has_toggle {
                     win.toggle();
                 } else {
                     win.window.set_visible(true);

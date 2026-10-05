@@ -1,6 +1,7 @@
 pub mod footer;
 pub mod header;
 pub mod mpris;
+pub mod pages;
 pub mod sliders;
 pub mod toggles;
 
@@ -10,6 +11,7 @@ use crate::services::SystemState;
 
 pub struct QuickSettingsWindow {
     pub window: gtk4::ApplicationWindow,
+    pub stack: gtk4::Stack,
 }
 
 impl QuickSettingsWindow {
@@ -36,37 +38,77 @@ impl QuickSettingsWindow {
         // Fetch live state
         let state = SystemState::fetch();
 
-        // Main obsidian card container
-        let card = gtk4::Box::builder()
+        // Stack for multi-page drilldown navigation
+        let stack = gtk4::Stack::builder()
+            .transition_type(gtk4::StackTransitionType::SlideLeftRight)
+            .transition_duration(250)
+            .build();
+
+        // 1. Main Obsidian Quick Settings Card
+        let main_card = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Vertical)
             .spacing(12)
             .css_classes(["quicksettings-card"])
             .width_request(420)
             .build();
 
-        // 1. Header Action Bar
         let header = header::HeaderBar::new();
-        card.append(&header.widget);
+        main_card.append(&header.widget);
 
-        // 2. 2-Column Quick Toggles Grid
-        let toggles = toggles::ToggleGrid::new(&state);
-        card.append(&toggles.widget);
+        let stack_wifi = stack.clone();
+        let stack_bt = stack.clone();
+        let stack_vpn = stack.clone();
 
-        // 3. Audio & Brightness Sliders
+        let toggles = toggles::ToggleGrid::new(
+            &state,
+            move || stack_wifi.set_visible_child_name("wifi"),
+            move || stack_bt.set_visible_child_name("bluetooth"),
+            move || stack_vpn.set_visible_child_name("vpn"),
+        );
+        main_card.append(&toggles.widget);
+
         let sliders = sliders::SlidersSection::new(&state);
-        card.append(&sliders.widget);
+        main_card.append(&sliders.widget);
 
-        // 4. MPRIS Media Player Card
         let mpris = mpris::MprisCard::new(&state);
-        card.append(&mpris.widget);
+        main_card.append(&mpris.widget);
 
-        // 5. Telemetry Footer Bar
         let footer = footer::FooterBar::new(&state);
-        card.append(&footer.widget);
+        main_card.append(&footer.widget);
 
-        window.set_child(Some(&card));
+        // 2. Wi-Fi Sub-Page
+        let stack_back1 = stack.clone();
+        let wifi_page = pages::WifiPage::new(&state, move || {
+            stack_back1.set_visible_child_name("main");
+        });
 
-        Self { window }
+        // 3. Bluetooth Sub-Page
+        let stack_back2 = stack.clone();
+        let bt_page = pages::BluetoothPage::new(&state, move || {
+            stack_back2.set_visible_child_name("main");
+        });
+
+        // 4. VPN Sub-Page
+        let stack_back3 = stack.clone();
+        let vpn_page = pages::VpnPage::new(&state, move || {
+            stack_back3.set_visible_child_name("main");
+        });
+
+        stack.add_named(&main_card, Some("main"));
+        stack.add_named(&wifi_page.widget, Some("wifi"));
+        stack.add_named(&bt_page.widget, Some("bluetooth"));
+        stack.add_named(&vpn_page.widget, Some("vpn"));
+        stack.set_visible_child_name("main");
+
+        window.set_child(Some(&stack));
+
+        Self { window, stack }
+    }
+
+    pub fn open_page(&self, page_name: &str) {
+        self.stack.set_visible_child_name(page_name);
+        self.window.set_visible(true);
+        self.window.present();
     }
 
     pub fn toggle(&self) {

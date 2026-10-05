@@ -101,6 +101,7 @@ impl AudioService {
             .spawn();
     }
 
+    #[allow(dead_code)]
     pub fn toggle_volume_mute() {
         let _ = Command::new("wpctl")
             .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])

@@ -307,3 +307,283 @@ window.quicksettings-window {
     color: @tertiary;
     font-weight: 600;
 }
+
+/* 6. Sub-Pages (Wi-Fi, Bluetooth, VPN Drill-Downs) */
+.subpage-container {
+    background-color: alpha(@surface-container, 0.96);
+    border-radius: 20px;
+    padding: 16px;
+    color: @on-surface;
+}
+
+.subpage-header {
+    background-color: alpha(@surface-container-high, 0.6);
+    border-radius: 14px;
+    padding: 8px 12px;
+}
+
+.subpage-back-btn {
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 50%;
+    background-color: alpha(@surface-container-highest, 0.8);
+    color: @on-surface;
+    border: none;
+    padding: 0;
+    transition: all 150ms ease;
+}
+
+.subpage-back-btn:hover {
+    background-color: @surface-container-highest;
+}
+
+.subpage-back-btn:active {
+    transform: scale(0.95);
+}
+
+.subpage-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: @on-surface;
+}
+
+.subpage-subtitle {
+    font-size: 11px;
+    color: @on-surface-variant;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.subpage-card {
+    background-color: alpha(@surface-container-high, 0.8);
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid alpha(@outline-variant, 0.25);
+}
+
+.subpage-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: @secondary;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.subpage-list {
+    background-color: alpha(@surface-container-low, 0.7);
+    border-radius: 14px;
+    border: 1px solid alpha(@outline-variant, 0.15);
+    overflow: hidden;
+}
+
+.subpage-item {
+    padding: 10px 12px;
+    border-bottom: 1px solid alpha(@outline-variant, 0.1);
+    transition: background-color 150ms ease;
+}
+
+.subpage-item:hover {
+    background-color: alpha(@surface-container-high, 0.5);
+}
+
+.subpage-item:last-child {
+    border-bottom: none;
+}
+
+.subpage-action-btn {
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+}
+
+.subpage-action-btn.primary {
+    background-color: @primary-container;
+    color: @on-primary-container;
+}
+
+.subpage-action-btn.secondary {
+    background-color: alpha(@surface-container-highest, 0.8);
+    color: @on-surface;
+}
+
+.subpage-action-btn.secondary:hover {
+    background-color: @error-container;
+    color: @on-error-container;
+}
+
+/* 7. Split Pill for Wi-Fi, Bluetooth, VPN */
+.toggle-pill-split {
+    min-height: 52px;
+    border-radius: 14px;
+    background-color: alpha(@surface-container-high, 0.8);
+    color: @on-surface;
+    border: 1px solid alpha(@outline-variant, 0.2);
+    overflow: hidden;
+    transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.toggle-pill-split:hover {
+    background-color: @surface-container-highest;
+}
+
+.toggle-pill-split.active-primary {
+    background-color: @primary-container;
+    color: @on-primary-container;
+    border-color: transparent;
+}
+
+.toggle-pill-split.active-secondary {
+    background-color: @secondary-container;
+    color: @on-secondary-container;
+    border-color: transparent;
+}
+
+.toggle-split-main {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 8px 10px;
+    color: inherit;
+    box-shadow: none;
+}
+
+.toggle-split-main:hover {
+    background-color: alpha(#ffffff, 0.08);
+}
+
+.toggle-split-chevron {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    min-width: 32px;
+    padding: 0 8px;
+    color: inherit;
+    opacity: 0.85;
+    box-shadow: none;
+}
+
+.toggle-split-chevron:hover {
+    background-color: alpha(#ffffff, 0.16);
+    opacity: 1;
+}
+
+/* 8. VPN Drill-Down specifics */
+.vpn-shield-icon {
+    color: @secondary;
+}
+
+.vpn-kill-switch {
+    border-radius: 9999px;
+    padding: 3px 10px;
+    border: none;
+    transition: all 200ms ease;
+}
+
+.vpn-kill-switch.active {
+    background-color: alpha(@secondary-container, 0.25);
+    color: @secondary;
+}
+
+.vpn-kill-switch.active:hover {
+    background-color: alpha(@secondary-container, 0.35);
+}
+
+.vpn-kill-switch.inactive {
+    background-color: alpha(@error-container, 0.3);
+    color: @error;
+}
+
+.vpn-kill-switch.inactive:hover {
+    background-color: alpha(@error-container, 0.45);
+}
+
+.vpn-ks-dot {
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+}
+
+.vpn-ks-label {
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.vpn-active-card {
+    background-color: alpha(@surface-container-high, 0.9);
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid alpha(@secondary, 0.3);
+    box-shadow: 0 4px 16px alpha(@surface-container-lowest, 0.4);
+}
+
+.vpn-icon-emerald {
+    min-width: 36px;
+    min-height: 36px;
+    border-radius: 10px;
+    background-color: alpha(@secondary, 0.2);
+    color: @secondary;
+    padding: 8px;
+}
+
+.vpn-iface-badge {
+    background-color: alpha(@surface-container, 0.9);
+    color: @on-surface-variant;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.vpn-ip-subtitle {
+    font-size: 11px;
+    color: @secondary;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.vpn-latency-pill {
+    background-color: alpha(@surface-container, 0.8);
+    border-radius: 9999px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: @secondary;
+}
+
+.vpn-traffic-box {
+    background-color: alpha(@surface-container-low, 0.7);
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+.vpn-traffic-header {
+    font-size: 10px;
+    font-weight: 700;
+    color: @on-surface-variant;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.vpn-traffic-val {
+    font-size: 13px;
+    font-weight: 700;
+    color: @on-surface;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.vpn-disconnect-btn {
+    background-color: alpha(@error-container, 0.5);
+    color: @error;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border: none;
+    transition: all 150ms ease;
+}
+
+.vpn-disconnect-btn:hover {
+    background-color: alpha(@error-container, 0.8);
+    color: @on-error-container;
+}
