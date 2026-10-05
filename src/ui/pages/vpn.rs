@@ -312,14 +312,29 @@ impl VpnPage {
                 .build();
 
             let disconnect_btn = gtk4::Button::builder()
-                .label("Disconnect")
+                .label(if state.network.vpn_active { "Disconnect" } else { "Connect" })
                 .icon_name("system-shutdown-symbolic")
                 .hexpand(true)
                 .css_classes(["vpn-disconnect-btn"])
                 .build();
             let vpn_id = state.network.vpn_name.clone();
+            let is_active_state = std::rc::Rc::new(std::cell::Cell::new(state.network.vpn_active));
+            let is_active_clone = is_active_state.clone();
+            let btn_clone = disconnect_btn.clone();
+            let ip_sub_clone = ip_sub.clone();
+            let vpn_id_action = vpn_id.clone();
             disconnect_btn.connect_clicked(move |_| {
-                NetworkService::disconnect_vpn(&vpn_id);
+                let next_val = !is_active_clone.get();
+                is_active_clone.set(next_val);
+                if next_val {
+                    NetworkService::connect_vpn(&vpn_id_action);
+                    btn_clone.set_label("Disconnect");
+                    ip_sub_clone.set_label("● Connecting...");
+                } else {
+                    NetworkService::disconnect_vpn(&vpn_id_action);
+                    btn_clone.set_label("Connect");
+                    ip_sub_clone.set_label("● Disconnected");
+                }
             });
 
             let reconnect_btn = gtk4::Button::builder()
@@ -353,8 +368,27 @@ impl VpnPage {
             .css_classes(["subpage-badge"])
             .build();
 
+        let mut tunnels: Vec<(String, String, String, bool)> = Vec::new();
+        for p in &state.network.vpn_profiles {
+            tunnels.push((
+                p.name.clone(),
+                format!("{} • {}", p.interface, p.vpn_type),
+                if p.active { "3.2ms".to_string() } else { "--".to_string() },
+                p.active,
+            ));
+        }
+
+        if tunnels.is_empty() {
+            tunnels.push((
+                "phamnv".to_string(),
+                "tun0 • OpenVPN".to_string(),
+                "3.2ms".to_string(),
+                state.network.vpn_active,
+            ));
+        }
+
         let config_count = gtk4::Label::builder()
-            .label("4 Configured")
+            .label(&format!("{} Configured", tunnels.len()))
             .halign(gtk4::Align::End)
             .css_classes(["subpage-subtitle"])
             .build();
@@ -368,15 +402,7 @@ impl VpnPage {
             .css_classes(["subpage-list"])
             .build();
 
-        // Tunnels matching the exact HTML catalog
-        let tunnels = [
-            ("Proton-Tokyo-JP#12", "wg1 • WireGuard", "142ms", "public", false),
-            ("Office-OpenVPN-Gateway", "tun0 • AES-256-GCM", "38ms", "corporate-fare", state.network.vpn_active),
-            ("NordVPN-US-East", "nordlynx • WireGuard", "82ms", "security-high", false),
-            ("Custom WG Tunnel", "wg-home.conf • Homelab", "12ms", "dns", false),
-        ];
-
-        for (name, desc, ping, _icon_name, active) in tunnels {
+        for (name, desc, ping, active) in tunnels {
             let row = gtk4::Box::builder()
                 .orientation(gtk4::Orientation::Horizontal)
                 .spacing(10)
@@ -395,7 +421,7 @@ impl VpnPage {
                 .build();
 
             let p_title = gtk4::Label::builder()
-                .label(name)
+                .label(&name)
                 .halign(gtk4::Align::Start)
                 .css_classes(["capsule-label"])
                 .build();
@@ -406,7 +432,7 @@ impl VpnPage {
                 .build();
 
             let p_sub = gtk4::Label::builder()
-                .label(desc)
+                .label(&desc)
                 .halign(gtk4::Align::Start)
                 .css_classes(["subpage-subtitle"])
                 .build();
@@ -427,7 +453,7 @@ impl VpnPage {
                 .valign(gtk4::Align::Center)
                 .build();
 
-            let p_name = name.to_string();
+            let p_name = name.clone();
             sw.connect_active_notify(move |s| {
                 if s.is_active() {
                     NetworkService::connect_vpn(&p_name);

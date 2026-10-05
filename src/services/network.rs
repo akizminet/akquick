@@ -70,10 +70,64 @@ pub struct NetworkState {
     pub scanned_aps: Vec<WifiAccessPoint>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct NetworkStatus {
+    pub wifi_enabled: bool,
+    pub wifi_ssid: String,
+    pub vpn_active: bool,
+    pub vpn_name: String,
+}
+
 pub struct NetworkService;
 
 impl NetworkService {
+    pub async fn fetch_status() -> NetworkStatus {
+        let mut status = NetworkStatus {
+            wifi_enabled: false,
+            wifi_ssid: "Disconnected".to_string(),
+            vpn_active: false,
+            vpn_name: "Disconnected".to_string(),
+        };
+
+        if let Ok(conn) = zbus::Connection::system().await {
+            if let Ok(nm) = NetworkManagerProxy::new(&conn).await {
+                if let Ok(enabled) = nm.wireless_enabled().await {
+                    status.wifi_enabled = enabled;
+                }
+
+                if let Ok(active_paths) = nm.active_connections().await {
+                    for path in active_paths {
+                        if let Ok(builder) = ActiveConnectionProxy::builder(&conn).path(path) {
+                            if let Ok(ac) = builder.build().await {
+                                let conn_type = ac.connection_type().await.unwrap_or_default();
+                                let id = ac.id().await.unwrap_or_default();
+
+                                if conn_type == "802-11-wireless" {
+                                    status.wifi_ssid = id;
+                                    status.wifi_enabled = true;
+                                } else if conn_type == "vpn" || conn_type == "wireguard" {
+                                    status.vpn_active = true;
+                                    status.vpn_name = id;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        status
+    }
+
     pub async fn fetch() -> NetworkState {
+        Self::fetch_internal(false).await
+    }
+
+    pub async fn fetch_with_scan() -> NetworkState {
+        Self::fetch_internal(true).await
+    }
+
+    async fn fetch_internal(scan: bool) -> NetworkState {
         let mut state = NetworkState {
             wifi_enabled: false,
             wifi_ssid: "Disconnected".to_string(),
@@ -102,7 +156,7 @@ impl NetworkService {
                                 if conn_type == "802-11-wireless" {
                                     state.wifi_ssid = id;
                                     state.wifi_enabled = true;
-                                } else if conn_type == "vpn" || conn_type == "wireguard" || conn_type == "tun" {
+                                } else if conn_type == "vpn" || conn_type == "wireguard" {
                                     state.vpn_active = true;
                                     state.vpn_name = id;
                                 }
@@ -138,16 +192,18 @@ impl NetworkService {
             };
         }
 
-        // Scan nearby access points
-        state.scanned_aps = Self::scan_wifi_sync();
+        // Scan nearby access points only if requested
+        if scan {
+            state.scanned_aps = Self::scan_wifi_sync();
+        }
 
         state
     }
 
     pub fn scan_wifi_sync() -> Vec<WifiAccessPoint> {
-        let mut list = Vec::new();
+        let mut list: Vec<WifiAccessPoint> = Vec::new();
         if let Ok(out) = Command::new("nmcli")
-            .args(["-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list"])
+            .args(["-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list", "--rescan", "auto"])
             .output()
         {
             let s = String::from_utf8_lossy(&out.stdout);
@@ -155,20 +211,33 @@ impl NetworkService {
                 let parts: Vec<&str> = line.split(':').collect();
                 if parts.len() >= 4 {
                     let ssid = parts[0].trim().to_string();
-                    if !ssid.is_empty() && !list.iter().any(|ap: &WifiAccessPoint| ap.ssid == ssid) {
+                    if !ssid.is_empty() {
                         let signal = parts[1].parse::<u32>().unwrap_or(50);
                         let security = parts[2].trim().to_string();
                         let in_use = parts[3].trim() == "*";
-                        list.push(WifiAccessPoint {
-                            ssid,
-                            signal,
-                            security,
-                            in_use,
-                        });
+
+                        if let Some(existing) = list.iter_mut().find(|ap| ap.ssid == ssid) {
+                            if signal > existing.signal {
+                                existing.signal = signal;
+                                existing.security = security;
+                            }
+                            if in_use {
+                                existing.in_use = true;
+                            }
+                        } else {
+                            list.push(WifiAccessPoint {
+                                ssid,
+                                signal,
+                                security,
+                                in_use,
+                            });
+                        }
                     }
                 }
             }
         }
+        // Sort visible networks by signal strength descending
+        list.sort_by(|a, b| b.signal.cmp(&a.signal));
         list
     }
 
@@ -187,7 +256,7 @@ impl NetworkService {
                     let dev = parts[2].to_string();
                     let state = parts[3].to_string();
 
-                    if ctype == "vpn" || ctype == "wireguard" || ctype == "tun" {
+                    if ctype == "vpn" || ctype == "wireguard" {
                         profiles.push(VpnProfile {
                             name,
                             vpn_type: if ctype == "vpn" { "OpenVPN".to_string() } else { "WireGuard".to_string() },
@@ -291,10 +360,20 @@ impl NetworkService {
     }
 
     pub fn connect_vpn(name: &str) {
-        let _ = Command::new("nmcli").args(["con", "up", "id", name]).spawn();
+        let target = if name.is_empty() || name == "Disconnected" || name == "tun0" {
+            "phamnv"
+        } else {
+            name
+        };
+        let _ = Command::new("nmcli").args(["con", "up", "id", target]).spawn();
     }
 
     pub fn disconnect_vpn(name: &str) {
-        let _ = Command::new("nmcli").args(["con", "down", "id", name]).spawn();
+        let target = if name.is_empty() || name == "Disconnected" || name == "tun0" {
+            "phamnv"
+        } else {
+            name
+        };
+        let _ = Command::new("nmcli").args(["con", "down", "id", target]).spawn();
     }
 }

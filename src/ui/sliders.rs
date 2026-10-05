@@ -130,6 +130,7 @@ impl SlidersSection {
         output_overlay.add_overlay(&output_overlay_content);
 
         // Circular Output Mute Button (HTML lines 173-176)
+        let is_out_muted = std::rc::Rc::new(std::cell::Cell::new(state.audio.volume_muted));
         let output_mute_btn = gtk4::Button::builder()
             .icon_name(if state.audio.volume_muted {
                 "audio-volume-muted-symbolic"
@@ -140,8 +141,20 @@ impl SlidersSection {
             .css_classes(["quick-mute-btn"])
             .build();
 
-        output_mute_btn.connect_clicked(|_| {
+        let is_out_muted_clone = is_out_muted.clone();
+        let output_mute_btn_clone = output_mute_btn.clone();
+        let output_icon_clone = output_icon.clone();
+        output_mute_btn.connect_clicked(move |_| {
+            let next_val = !is_out_muted_clone.get();
+            is_out_muted_clone.set(next_val);
             AudioService::toggle_volume_mute();
+            if next_val {
+                output_mute_btn_clone.set_icon_name("audio-volume-muted-symbolic");
+                output_icon_clone.set_icon_name(Some("audio-volume-muted-symbolic"));
+            } else {
+                output_mute_btn_clone.set_icon_name("audio-volume-high-symbolic");
+                output_icon_clone.set_icon_name(Some("audio-volume-high-symbolic"));
+            }
         });
 
         output_row.append(&output_overlay);
@@ -275,6 +288,7 @@ impl SlidersSection {
         mic_overlay.add_overlay(&mic_overlay_content);
 
         // Separate Circular Quick Mute Button (HTML line 204)
+        let is_mic_muted = std::rc::Rc::new(std::cell::Cell::new(state.audio.mic_muted));
         let mute_btn = gtk4::Button::builder()
             .icon_name(if state.audio.mic_muted || !state.audio.has_input_device {
                 "microphone-sensitivity-muted-symbolic"
@@ -286,8 +300,20 @@ impl SlidersSection {
             .sensitive(state.audio.has_input_device)
             .build();
 
-        mute_btn.connect_clicked(|_| {
+        let is_mic_muted_clone = is_mic_muted.clone();
+        let mute_btn_clone = mute_btn.clone();
+        let mic_icon_clone = mic_icon.clone();
+        mute_btn.connect_clicked(move |_| {
+            let next_val = !is_mic_muted_clone.get();
+            is_mic_muted_clone.set(next_val);
             AudioService::toggle_mic_mute();
+            if next_val {
+                mute_btn_clone.set_icon_name("microphone-sensitivity-muted-symbolic");
+                mic_icon_clone.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
+            } else {
+                mute_btn_clone.set_icon_name("audio-input-microphone-symbolic");
+                mic_icon_clone.set_icon_name(Some("audio-input-microphone-symbolic"));
+            }
         });
 
         mic_row.append(&mic_overlay);
@@ -297,72 +323,74 @@ impl SlidersSection {
         mic_box.append(&mic_row);
 
         // =========================================================================
-        // 3. Display Brightness Capsule Slider (HTML Lines 209-223)
+        // 3. Display Brightness Capsule Sliders (Dual 2K Monitors)
         // =========================================================================
         let display_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Vertical)
-            .spacing(4)
+            .spacing(8)
             .margin_top(4)
             .build();
 
-        let display_overlay = gtk4::Overlay::builder()
-            .hexpand(true)
-            .build();
+        for disp in &state.displays {
+            let display_overlay = gtk4::Overlay::builder()
+                .hexpand(true)
+                .build();
 
-        let display_scale = gtk4::Scale::with_range(gtk4::Orientation::Horizontal, 0.0, 100.0, 1.0);
-        display_scale.set_value(85.0);
-        display_scale.set_hexpand(true);
-        display_scale.set_draw_value(false);
-        display_scale.add_css_class("capsule-slider");
-        display_scale.add_css_class("brightness-capsule");
+            let display_scale = gtk4::Scale::with_range(gtk4::Orientation::Horizontal, 0.0, 100.0, 1.0);
+            display_scale.set_value(disp.brightness_percent as f64);
+            display_scale.set_hexpand(true);
+            display_scale.set_draw_value(false);
+            display_scale.add_css_class("capsule-slider");
+            display_scale.add_css_class("brightness-capsule");
 
-        let display_overlay_content = gtk4::Box::builder()
-            .orientation(gtk4::Orientation::Horizontal)
-            .hexpand(true)
-            .valign(gtk4::Align::Center)
-            .css_classes(["capsule-overlay-content"])
-            .can_target(false)
-            .build();
+            let display_overlay_content = gtk4::Box::builder()
+                .orientation(gtk4::Orientation::Horizontal)
+                .hexpand(true)
+                .valign(gtk4::Align::Center)
+                .css_classes(["capsule-overlay-content"])
+                .can_target(false)
+                .build();
 
-        let display_left = gtk4::Box::builder()
-            .orientation(gtk4::Orientation::Horizontal)
-            .spacing(8)
-            .hexpand(true)
-            .halign(gtk4::Align::Start)
-            .build();
+            let display_left = gtk4::Box::builder()
+                .orientation(gtk4::Orientation::Horizontal)
+                .spacing(8)
+                .hexpand(true)
+                .halign(gtk4::Align::Start)
+                .build();
 
-        let display_icon = gtk4::Image::builder()
-            .icon_name("display-brightness-symbolic")
-            .pixel_size(18)
-            .build();
+            let display_icon = gtk4::Image::builder()
+                .icon_name("display-brightness-symbolic")
+                .pixel_size(18)
+                .build();
 
-        let display_desc = gtk4::Label::builder()
-            .label("Studio Display 5K")
-            .css_classes(["capsule-label"])
-            .build();
+            let display_desc = gtk4::Label::builder()
+                .label(&disp.label)
+                .css_classes(["capsule-label"])
+                .build();
 
-        display_left.append(&display_icon);
-        display_left.append(&display_desc);
+            display_left.append(&display_icon);
+            display_left.append(&display_desc);
 
-        let display_pct = gtk4::Label::builder()
-            .label("85%")
-            .halign(gtk4::Align::End)
-            .css_classes(["capsule-percentage"])
-            .build();
+            let display_pct = gtk4::Label::builder()
+                .label(&format!("{}%", disp.brightness_percent))
+                .halign(gtk4::Align::End)
+                .css_classes(["capsule-percentage"])
+                .build();
 
-        display_overlay_content.append(&display_left);
-        display_overlay_content.append(&display_pct);
+            display_overlay_content.append(&display_left);
+            display_overlay_content.append(&display_pct);
 
-        let disp_pct_clone = display_pct.clone();
-        display_scale.connect_value_changed(move |s| {
-            let val = s.value();
-            disp_pct_clone.set_label(&format!("{}%", val.round() as u32));
-        });
+            let disp_pct_clone = display_pct.clone();
+            display_scale.connect_value_changed(move |s| {
+                let val = s.value();
+                disp_pct_clone.set_label(&format!("{}%", val.round() as u32));
+            });
 
-        display_overlay.set_child(Some(&display_scale));
-        display_overlay.add_overlay(&display_overlay_content);
+            display_overlay.set_child(Some(&display_scale));
+            display_overlay.add_overlay(&display_overlay_content);
 
-        display_box.append(&display_overlay);
+            display_box.append(&display_overlay);
+        }
 
         tray.append(&output_box);
         tray.append(&mic_box);

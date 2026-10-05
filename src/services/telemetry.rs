@@ -1,6 +1,4 @@
 use std::fs;
-use std::thread::sleep;
-use std::time::Duration;
 
 #[derive(Debug, Clone, Default)]
 pub struct TelemetryState {
@@ -56,16 +54,30 @@ impl TelemetryService {
     }
 
     fn calculate_cpu_usage() -> u32 {
-        if let Some((idle1, total1)) = Self::read_cpu_times() {
-            sleep(Duration::from_millis(80));
-            if let Some((idle2, total2)) = Self::read_cpu_times() {
-                let total_delta = total2.saturating_sub(total1);
-                let idle_delta = idle2.saturating_sub(idle1);
+        static PREV_CPU: std::sync::Mutex<Option<(u64, u64)>> = std::sync::Mutex::new(None);
 
+        if let Some((curr_idle, curr_total)) = Self::read_cpu_times() {
+            let mut prev = PREV_CPU.lock().unwrap();
+            if let Some((prev_idle, prev_total)) = *prev {
+                let total_delta = curr_total.saturating_sub(prev_total);
+                let idle_delta = curr_idle.saturating_sub(prev_idle);
+                *prev = Some((curr_idle, curr_total));
                 if total_delta > 0 {
                     let busy_delta = total_delta.saturating_sub(idle_delta);
                     return ((busy_delta as f64 / total_delta as f64) * 100.0).round() as u32;
                 }
+            } else {
+                *prev = Some((curr_idle, curr_total));
+                // Instantaneous fallback from loadavg
+                if let Ok(load) = fs::read_to_string("/proc/loadavg") {
+                    if let Some(first) = load.split_whitespace().next() {
+                        if let Ok(val) = first.parse::<f64>() {
+                            let ncpu = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(8) as f64;
+                            return ((val / ncpu) * 100.0).clamp(1.0, 100.0).round() as u32;
+                        }
+                    }
+                }
+                return 6;
             }
         }
         0

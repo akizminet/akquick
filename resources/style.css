@@ -373,7 +373,6 @@ window.quicksettings-window {
     background-color: alpha(@surface-container-low, 0.7);
     border-radius: 14px;
     border: 1px solid alpha(@outline-variant, 0.15);
-    overflow: hidden;
 }
 
 .subpage-item {
@@ -420,7 +419,6 @@ window.quicksettings-window {
     background-color: alpha(@surface-container-high, 0.8);
     color: @on-surface;
     border: 1px solid alpha(@outline-variant, 0.2);
-    overflow: hidden;
     transition: all 200ms cubic-bezier(0.2, 0, 0, 1);
 }
 

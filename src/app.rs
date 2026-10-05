@@ -34,7 +34,7 @@ impl App {
 
             let mut wh = wh_activate.borrow_mut();
             if wh.is_none() {
-                let win = QuickSettingsWindow::new(app);
+                let win = QuickSettingsWindow::new(app, false);
                 win.window.present();
                 *wh = Some(win);
             } else if let Some(ref win) = *wh {
@@ -45,6 +45,7 @@ impl App {
         let wh_cmd = window_holder.clone();
         app.connect_command_line(move |app, cmd| {
             let args = cmd.arguments();
+            let is_bench = args.iter().any(|arg| arg == "--bench" || arg == "-b");
             let has_toggle = args.iter().any(|arg| arg == "--toggle" || arg == "-t");
             let page_target = args.windows(2).find_map(|w| {
                 if w[0] == "--page" || w[0] == "-p" {
@@ -66,7 +67,7 @@ impl App {
 
             let mut wh = wh_cmd.borrow_mut();
             if wh.is_none() {
-                let win = QuickSettingsWindow::new(app);
+                let win = QuickSettingsWindow::new(app, is_bench);
                 if let Some(ref target) = page_target {
                     win.open_page(target);
                 } else {
