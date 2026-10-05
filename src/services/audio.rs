@@ -17,17 +17,7 @@ pub struct AudioService;
 
 impl AudioService {
     pub fn fetch() -> AudioState {
-        let mut state = AudioState {
-            volume_percent: 50,
-            volume_muted: false,
-            sink_name: "ALC897 Analog".to_string(),
-            sink_desc: "Built-in Audio".to_string(),
-            has_input_device: false,
-            mic_percent: 0,
-            mic_muted: true,
-            source_name: "No Input Device".to_string(),
-            source_desc: "Disconnected".to_string(),
-        };
+        let mut state = AudioState::default();
 
         // 1. Output Sink Volume & Mute
         if let Ok(out) = Command::new("wpctl").args(["get-volume", "@DEFAULT_AUDIO_SINK@"]).output() {
@@ -41,7 +31,7 @@ impl AudioService {
             state.volume_muted = s.contains("[MUTED]");
         }
 
-        // 2. Output Sink Device Name & Description
+        // 2. Output Sink Device Name & Description from PipeWire
         if let Ok(out) = Command::new("wpctl").args(["inspect", "@DEFAULT_AUDIO_SINK@"]).output() {
             let s = String::from_utf8_lossy(&out.stdout);
             for line in s.lines() {
@@ -58,7 +48,14 @@ impl AudioService {
             }
         }
 
-        // 3. Input Source Volume & Device
+        if state.sink_name.is_empty() {
+            state.sink_name = "Default Output".to_string();
+        }
+        if state.sink_desc.is_empty() {
+            state.sink_desc = "Audio Sink".to_string();
+        }
+
+        // 3. Input Source Volume & Device from PipeWire
         if let Ok(out) = Command::new("wpctl").args(["get-volume", "@DEFAULT_AUDIO_SOURCE@"]).output() {
             let s = String::from_utf8_lossy(&out.stdout);
             if !s.contains("error") && !s.contains("Translate ID error") {
@@ -89,6 +86,9 @@ impl AudioService {
                     }
                 }
             }
+        } else {
+            state.source_name = "Disconnected".to_string();
+            state.source_desc = "No Microphone Detected".to_string();
         }
 
         state

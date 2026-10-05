@@ -1,4 +1,6 @@
 use std::fs;
+use std::thread::sleep;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Default)]
 pub struct TelemetryState {
@@ -12,22 +14,17 @@ pub struct TelemetryService;
 
 impl TelemetryService {
     pub fn fetch() -> TelemetryState {
-        let mut state = TelemetryState {
-            cpu_percent: 14,
-            ram_used_gib: 8.4,
-            ram_total_gib: 31.1,
-            hostname: "homepc".to_string(),
-        };
+        let mut state = TelemetryState::default();
 
-        // Hostname
-        if let Ok(h) = fs::read_to_string("/etc/hostname") {
+        // 1. Hostname from /proc/sys/kernel/hostname or /etc/hostname
+        if let Ok(h) = fs::read_to_string("/proc/sys/kernel/hostname").or_else(|_| fs::read_to_string("/etc/hostname")) {
             let h = h.trim();
             if !h.is_empty() {
                 state.hostname = h.to_string();
             }
         }
 
-        // RAM from /proc/meminfo
+        // 2. RAM dynamically calculated from /proc/meminfo
         if let Ok(content) = fs::read_to_string("/proc/meminfo") {
             let mut total_kb: f32 = 0.0;
             let mut avail_kb: f32 = 0.0;
@@ -52,27 +49,47 @@ impl TelemetryService {
             }
         }
 
-        // CPU from /proc/stat
-        if let Ok(content) = fs::read_to_string("/proc/stat") {
-            if let Some(cpu_line) = content.lines().next() {
-                let parts: Vec<u64> = cpu_line
-                    .split_whitespace()
-                    .skip(1)
-                    .filter_map(|s| s.parse().ok())
-                    .collect();
+        // 3. CPU calculated dynamically via differential sampling of /proc/stat
+        state.cpu_percent = Self::calculate_cpu_usage();
 
-                if parts.len() >= 4 {
-                    let idle = parts[3];
-                    let total: u64 = parts.iter().sum();
-                    // Basic rough estimation or sample
-                    let non_idle = total.saturating_sub(idle);
-                    if total > 0 {
-                        state.cpu_percent = ((non_idle as f64 / total as f64) * 100.0).round() as u32;
-                    }
+        state
+    }
+
+    fn calculate_cpu_usage() -> u32 {
+        if let Some((idle1, total1)) = Self::read_cpu_times() {
+            sleep(Duration::from_millis(80));
+            if let Some((idle2, total2)) = Self::read_cpu_times() {
+                let total_delta = total2.saturating_sub(total1);
+                let idle_delta = idle2.saturating_sub(idle1);
+
+                if total_delta > 0 {
+                    let busy_delta = total_delta.saturating_sub(idle_delta);
+                    return ((busy_delta as f64 / total_delta as f64) * 100.0).round() as u32;
                 }
             }
         }
+        0
+    }
 
-        state
+    fn read_cpu_times() -> Option<(u64, u64)> {
+        let content = fs::read_to_string("/proc/stat").ok()?;
+        let first_line = content.lines().next()?;
+        if !first_line.starts_with("cpu ") {
+            return None;
+        }
+
+        let parts: Vec<u64> = first_line
+            .split_whitespace()
+            .skip(1)
+            .filter_map(|s| s.parse().ok())
+            .collect();
+
+        if parts.len() >= 4 {
+            let idle = parts[3] + parts.get(4).copied().unwrap_or(0); // idle + iowait
+            let total: u64 = parts.iter().sum();
+            return Some((idle, total));
+        }
+
+        None
     }
 }
