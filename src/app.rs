@@ -46,6 +46,7 @@ impl App {
         app.connect_command_line(move |app, cmd| {
             let args = cmd.arguments();
             let is_bench = args.iter().any(|arg| arg == "--bench" || arg == "-b");
+            let is_daemon = args.iter().any(|arg| arg == "--daemon" || arg == "-d");
             let has_toggle = args.iter().any(|arg| arg == "--toggle" || arg == "-t");
             let page_target = args.windows(2).find_map(|w| {
                 if w[0] == "--page" || w[0] == "-p" {
@@ -68,14 +69,19 @@ impl App {
             let mut wh = wh_cmd.borrow_mut();
             if wh.is_none() {
                 let win = QuickSettingsWindow::new(app, is_bench);
-                if let Some(ref target) = page_target {
+                if is_daemon {
+                    std::mem::forget(app.hold());
+                    win.window.set_visible(false);
+                } else if let Some(ref target) = page_target {
                     win.open_page(target);
                 } else {
                     win.window.present();
                 }
                 *wh = Some(win);
             } else if let Some(ref win) = *wh {
-                if let Some(ref target) = page_target {
+                if is_daemon {
+                    // Daemon already resident and active
+                } else if let Some(ref target) = page_target {
                     win.open_page(target);
                 } else if has_toggle {
                     win.toggle();
