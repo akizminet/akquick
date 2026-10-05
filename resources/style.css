@@ -133,48 +133,107 @@ window.quicksettings-window {
     font-family: 'JetBrains Mono', 'Monaspace Argon', monospace;
 }
 
-/* 3. Sliders */
-.slider-group {
-    background-color: alpha(@surface-container-low, 0.6);
-    border-radius: 14px;
-    padding: 10px 14px;
-    border: 1px solid alpha(@outline-variant, 0.15);
+/* 3. Sliders & Device Controls Capsule Tray */
+.capsule-tray {
+    background-color: alpha(@surface-container-high, 0.6);
+    border-radius: 16px;
+    padding: 10px 12px;
+    border: 1px solid alpha(@outline-variant, 0.2);
 }
 
-.slider-label {
-    font-size: 12px;
-    font-weight: 500;
-    color: @on-surface-variant;
-}
-
-.slider-value {
-    font-size: 12px;
+.device-chip {
+    border-radius: 9999px;
+    background-color: @surface-container;
+    color: @primary;
+    font-family: 'JetBrains Mono', 'Monaspace Argon', monospace;
+    font-size: 11px;
     font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
+    padding: 3px 10px;
+    border: none;
+    transition: all 150ms ease;
 }
 
-scale trough {
-    min-height: 8px;
-    border-radius: 6px;
+.device-chip:hover {
     background-color: @surface-container-highest;
 }
 
-scale highlight {
-    border-radius: 6px;
-    background-color: @primary;
+.device-chip.secondary-chip {
+    color: @secondary;
 }
 
-scale.secondary-scale highlight {
-    background-color: @secondary;
+.capsule-slider {
+    min-height: 40px;
+    padding: 0;
+    margin: 0;
 }
 
-scale slider {
-    min-width: 16px;
-    min-height: 16px;
+.capsule-slider trough {
+    min-height: 40px;
+    border-radius: 9999px;
+    background-color: @surface-container-lowest;
+    border: 1px solid alpha(@outline-variant, 0.15);
+    padding: 0;
+}
+
+.capsule-slider highlight {
+    min-height: 40px;
+    border-radius: 9999px;
+    background-color: alpha(@primary, 0.35);
+}
+
+.capsule-slider.secondary-capsule highlight {
+    background-color: alpha(@secondary, 0.35);
+}
+
+.capsule-slider slider {
+    min-width: 0;
+    min-height: 0;
+    opacity: 0;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.capsule-overlay-content {
+    padding-left: 12px;
+    padding-right: 12px;
+}
+
+.capsule-label {
+    font-family: 'JetBrains Mono', 'Monaspace Argon', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: @on-surface;
+}
+
+.capsule-percentage {
+    font-family: 'JetBrains Mono', 'Monaspace Argon', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: @primary;
+}
+
+.capsule-percentage.secondary-text {
+    color: @secondary;
+}
+
+.quick-mute-btn {
+    min-width: 36px;
+    min-height: 36px;
     border-radius: 50%;
-    background-color: @on-surface;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    background-color: @surface-container;
+    color: @on-surface;
+    border: none;
+    padding: 0;
+    transition: all 150ms ease;
 }
+
+.quick-mute-btn:hover {
+    background-color: @surface-container-highest;
+}
+
 
 /* 4. MPRIS Media Player Card */
 .mpris-card {
