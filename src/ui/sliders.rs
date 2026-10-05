@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use crate::services::SystemState;
+use crate::services::{AudioService, BacklightService, SystemState};
 
 pub struct SlidersSection {
     pub widget: gtk4::Box,
@@ -16,15 +16,15 @@ impl SlidersSection {
         let sound_box = Self::create_slider_row(
             "Sound Output",
             "Focusrite DAC",
-            if state.volume_muted { "audio-volume-muted-symbolic" } else { "audio-volume-high-symbolic" },
-            "Analog 1/2",
-            state.volume_percent,
+            if state.audio.volume_muted { "audio-volume-muted-symbolic" } else { "audio-volume-high-symbolic" },
+            &state.audio.sink_name,
+            state.audio.volume_percent,
             None,
             Some(|| {
-                SystemState::toggle_volume_mute();
+                AudioService::toggle_volume_mute();
             }),
             |val| {
-                SystemState::set_volume(val as u32);
+                AudioService::set_volume(val as u32);
             },
         );
 
@@ -32,15 +32,15 @@ impl SlidersSection {
         let mic_box = Self::create_slider_row(
             "Input Level",
             "Shure MV7 USB",
-            if state.mic_muted { "microphone-sensitivity-muted-symbolic" } else { "audio-input-microphone-symbolic" },
-            "Gain Boost",
-            state.mic_percent,
+            if state.audio.mic_muted { "microphone-sensitivity-muted-symbolic" } else { "audio-input-microphone-symbolic" },
+            &state.audio.source_name,
+            state.audio.mic_percent,
             Some("secondary-scale"),
             Some(|| {
-                SystemState::toggle_mic_mute();
+                AudioService::toggle_mic_mute();
             }),
             |val| {
-                SystemState::set_mic_volume(val as u32);
+                AudioService::set_mic_volume(val as u32);
             },
         );
 
@@ -54,7 +54,7 @@ impl SlidersSection {
             None,
             None::<fn()>,
             |val| {
-                SystemState::set_brightness(val as u32);
+                BacklightService::set(val as u32);
             },
         );
 
@@ -107,7 +107,7 @@ impl SlidersSection {
         top_row.append(&cat_label);
         top_row.append(&dev_label);
 
-        // Slider Row: Icon (Button if clickable) + Label + Scale + Percentage
+        // Slider Row: Icon + Label + Scale + Percentage
         let slider_row = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .spacing(10)

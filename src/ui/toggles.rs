@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use crate::services::SystemState;
+use crate::services::{AudioService, SystemState};
 
 pub struct ToggleGrid {
     pub widget: gtk4::Grid,
@@ -15,26 +15,26 @@ impl ToggleGrid {
             .css_classes(["toggle-grid"])
             .build();
 
-        // 1. Wi-Fi
+        // 1. Wi-Fi (from NetworkManager DBus)
         let wifi_pill = Self::create_pill(
             "network-wireless-symbolic",
             "Wi-Fi",
-            &state.wifi_ssid,
-            true, // chevron
-            if state.wifi_enabled { Some("active-primary") } else { None },
+            &state.network.wifi_ssid,
+            true,
+            if state.network.wifi_enabled { Some("active-primary") } else { None },
         );
         wifi_pill.connect_clicked(|_| {
             let _ = std::process::Command::new("nmrs-gui").spawn();
         });
 
-        // 2. Bluetooth
-        let bt_sub = format!("{} Connected", state.bluetooth_connected);
+        // 2. Bluetooth (from BlueZ DBus)
+        let bt_sub = format!("{} Connected", state.bluetooth.connected_count);
         let bt_pill = Self::create_pill(
             "bluetooth-active-symbolic",
             "Bluetooth",
             &bt_sub,
             true,
-            if state.bluetooth_enabled { Some("active-primary") } else { None },
+            if state.bluetooth.enabled { Some("active-primary") } else { None },
         );
         bt_pill.connect_clicked(|_| {
             let _ = std::process::Command::new("bluetoothctl").args(["power", "toggle"]).spawn();
@@ -69,23 +69,23 @@ impl ToggleGrid {
 
         // 5. Microphone
         let mic_pill = Self::create_pill(
-            if state.mic_muted { "microphone-sensitivity-muted-symbolic" } else { "audio-input-microphone-symbolic" },
+            if state.audio.mic_muted { "microphone-sensitivity-muted-symbolic" } else { "audio-input-microphone-symbolic" },
             "Microphone",
-            if state.mic_muted { "● Muted" } else { "● Unmuted" },
+            if state.audio.mic_muted { "● Muted" } else { "● Unmuted" },
             false,
-            if !state.mic_muted { Some("active-secondary") } else { None },
+            if !state.audio.mic_muted { Some("active-secondary") } else { None },
         );
         mic_pill.connect_clicked(|_| {
-            SystemState::toggle_mic_mute();
+            AudioService::toggle_mic_mute();
         });
 
-        // 6. WireGuard
+        // 6. WireGuard / VPN (from NetworkManager DBus)
         let wg_pill = Self::create_pill(
             "network-vpn-symbolic",
             "WireGuard",
-            if state.wireguard_active { "Zurich-01" } else { "Disconnected" },
+            if state.network.vpn_active { "Zurich-01" } else { "Disconnected" },
             true,
-            if state.wireguard_active { Some("active-secondary") } else { Some("active-secondary") },
+            if state.network.vpn_active { Some("active-secondary") } else { Some("active-secondary") },
         );
 
         // 7. Power Mode

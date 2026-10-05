@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use crate::services::SystemState;
+use crate::services::{MprisService, SystemState};
 
 pub struct MprisCard {
     pub widget: gtk4::Box,
@@ -26,7 +26,7 @@ impl MprisCard {
             .css_classes(["mpris-art"])
             .build();
 
-        // Track Info
+        // Track Info (from MPRIS DBus)
         let info_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Vertical)
             .spacing(2)
@@ -35,21 +35,21 @@ impl MprisCard {
             .build();
 
         let title_lbl = gtk4::Label::builder()
-            .label(&state.mpris_title)
+            .label(&state.mpris.title)
             .halign(gtk4::Align::Start)
             .css_classes(["mpris-title"])
             .ellipsize(gtk4::pango::EllipsizeMode::End)
             .build();
 
         let artist_lbl = gtk4::Label::builder()
-            .label(&state.mpris_artist)
+            .label(&state.mpris.artist)
             .halign(gtk4::Align::Start)
             .css_classes(["mpris-artist"])
             .ellipsize(gtk4::pango::EllipsizeMode::End)
             .build();
 
         let source_lbl = gtk4::Label::builder()
-            .label(&format!("● {}", state.mpris_player.to_uppercase()))
+            .label(&format!("● {}", state.mpris.player_name.to_uppercase()))
             .halign(gtk4::Align::Start)
             .css_classes(["mpris-source"])
             .build();
@@ -58,7 +58,7 @@ impl MprisCard {
         info_box.append(&artist_lbl);
         info_box.append(&source_lbl);
 
-        // Control Buttons (Prev, Play/Pause, Next)
+        // Control Buttons (Prev, Play/Pause, Next) via DBus
         let controls = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .spacing(4)
@@ -70,15 +70,15 @@ impl MprisCard {
             .css_classes(["mpris-btn"])
             .build();
         prev_btn.connect_clicked(|_| {
-            SystemState::mpris_previous();
+            MprisService::previous();
         });
 
         let play_btn = gtk4::Button::builder()
-            .icon_name(if state.mpris_playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" })
+            .icon_name(if state.mpris.is_playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" })
             .css_classes(["mpris-btn", "play-pause-btn"])
             .build();
         play_btn.connect_clicked(|_| {
-            SystemState::mpris_play_pause();
+            MprisService::play_pause();
         });
 
         let next_btn = gtk4::Button::builder()
@@ -86,7 +86,7 @@ impl MprisCard {
             .css_classes(["mpris-btn"])
             .build();
         next_btn.connect_clicked(|_| {
-            SystemState::mpris_next();
+            MprisService::next();
         });
 
         controls.append(&prev_btn);

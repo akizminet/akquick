@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use crate::services::SystemState;
+use crate::services::ActionService;
 
 pub struct HeaderBar {
     pub widget: gtk4::Box,
@@ -26,7 +26,7 @@ impl HeaderBar {
             .css_classes(["header-button"])
             .build();
         screenshot_btn.connect_clicked(|_| {
-            SystemState::take_screenshot();
+            ActionService::take_screenshot();
         });
 
         let settings_btn = gtk4::Button::builder()
@@ -35,7 +35,7 @@ impl HeaderBar {
             .css_classes(["header-button"])
             .build();
         settings_btn.connect_clicked(|_| {
-            SystemState::open_settings();
+            ActionService::open_settings();
         });
 
         left_box.append(&screenshot_btn);
@@ -54,7 +54,7 @@ impl HeaderBar {
             .css_classes(["header-button"])
             .build();
         lock_btn.connect_clicked(|_| {
-            SystemState::lock_session();
+            ActionService::lock_session();
         });
 
         let power_btn = gtk4::Button::builder()
@@ -63,7 +63,7 @@ impl HeaderBar {
             .css_classes(["header-button", "power-btn"])
             .build();
         power_btn.connect_clicked(|_| {
-            SystemState::power_menu();
+            ActionService::power_menu();
         });
 
         right_box.append(&lock_btn);
