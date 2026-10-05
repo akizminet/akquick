@@ -28,13 +28,21 @@ impl ToggleGrid {
         });
 
         // 2. Bluetooth (from BlueZ DBus)
-        let bt_sub = format!("{} Connected", state.bluetooth.connected_count);
+        let bt_sub = if state.bluetooth.connected_count > 0 {
+            format!("{} Connected", state.bluetooth.connected_count)
+        } else {
+            "No Devices".to_string()
+        };
         let bt_pill = Self::create_pill(
             "bluetooth-active-symbolic",
             "Bluetooth",
             &bt_sub,
             true,
-            if state.bluetooth.enabled { Some("active-primary") } else { None },
+            if state.bluetooth.enabled && state.bluetooth.connected_count > 0 {
+                Some("active-primary")
+            } else {
+                None // Inactive grey when 0 devices connected!
+            },
         );
         bt_pill.connect_clicked(|_| {
             let _ = std::process::Command::new("bluetoothctl").args(["power", "toggle"]).spawn();
@@ -52,13 +60,13 @@ impl ToggleGrid {
             let _ = std::process::Command::new("swaync-client").arg("-d").spawn();
         });
 
-        // 4. Night Light
+        // 4. Night Light (Live hyprsunset check)
         let night_pill = Self::create_pill(
             "weather-clear-night-symbolic",
             "Night Light",
             if state.night_light_active { "4000K Warm" } else { "Off" },
             false,
-            if state.night_light_active { Some("active-tertiary") } else { Some("active-tertiary") },
+            if state.night_light_active { Some("active-tertiary") } else { None },
         );
         night_pill.connect_clicked(|_| {
             let _ = std::process::Command::new("sh")
@@ -68,34 +76,52 @@ impl ToggleGrid {
         });
 
         // 5. Microphone
+        let mic_label = if !state.audio.has_input_device {
+            "● No Input"
+        } else if state.audio.mic_muted {
+            "● Muted"
+        } else {
+            "● Unmuted"
+        };
         let mic_pill = Self::create_pill(
-            if state.audio.mic_muted { "microphone-sensitivity-muted-symbolic" } else { "audio-input-microphone-symbolic" },
+            if state.audio.mic_muted || !state.audio.has_input_device {
+                "microphone-sensitivity-muted-symbolic"
+            } else {
+                "audio-input-microphone-symbolic"
+            },
             "Microphone",
-            if state.audio.mic_muted { "● Muted" } else { "● Unmuted" },
+            mic_label,
             false,
-            if !state.audio.mic_muted { Some("active-secondary") } else { None },
+            if state.audio.has_input_device && !state.audio.mic_muted {
+                Some("active-secondary")
+            } else {
+                None
+            },
         );
         mic_pill.connect_clicked(|_| {
             AudioService::toggle_mic_mute();
         });
 
-        // 6. WireGuard / VPN (from NetworkManager DBus)
-        let wg_pill = Self::create_pill(
+        // 6. VPN (Real active connection name from NetworkManager DBus)
+        let vpn_pill = Self::create_pill(
             "network-vpn-symbolic",
-            "WireGuard",
-            if state.network.vpn_active { "Zurich-01" } else { "Disconnected" },
+            "VPN",
+            &state.network.vpn_name,
             true,
-            if state.network.vpn_active { Some("active-secondary") } else { Some("active-secondary") },
+            if state.network.vpn_active { Some("active-secondary") } else { None },
         );
 
-        // 7. Power Mode
+        // 7. Power Menu
         let power_pill = Self::create_pill(
-            "power-profile-balanced-symbolic",
-            "Power Mode",
-            &state.power_mode,
+            "system-shutdown-symbolic",
+            "Power Menu",
+            "Shutdown / Lock",
             false,
             None,
         );
+        power_pill.connect_clicked(|_| {
+            let _ = std::process::Command::new("/var/home/phamnv/.config/rofi/powermenu.sh").spawn();
+        });
 
         // 8. Dark Style
         let dark_pill = Self::create_pill(
@@ -111,7 +137,7 @@ impl ToggleGrid {
         grid.attach(&dnd_pill, 0, 1, 1, 1);
         grid.attach(&night_pill, 1, 1, 1, 1);
         grid.attach(&mic_pill, 0, 2, 1, 1);
-        grid.attach(&wg_pill, 1, 2, 1, 1);
+        grid.attach(&vpn_pill, 1, 2, 1, 1);
         grid.attach(&power_pill, 0, 3, 1, 1);
         grid.attach(&dark_pill, 1, 3, 1, 1);
 

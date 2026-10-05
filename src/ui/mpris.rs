@@ -24,9 +24,10 @@ impl MprisCard {
             .icon_name("audio-x-generic-symbolic")
             .pixel_size(48)
             .css_classes(["mpris-art"])
+            .opacity(if state.mpris.has_player { 1.0 } else { 0.4 })
             .build();
 
-        // Track Info (from MPRIS DBus)
+        // Track Info
         let info_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Vertical)
             .spacing(2)
@@ -39,6 +40,7 @@ impl MprisCard {
             .halign(gtk4::Align::Start)
             .css_classes(["mpris-title"])
             .ellipsize(gtk4::pango::EllipsizeMode::End)
+            .opacity(if state.mpris.has_player { 1.0 } else { 0.6 })
             .build();
 
         let artist_lbl = gtk4::Label::builder()
@@ -46,19 +48,26 @@ impl MprisCard {
             .halign(gtk4::Align::Start)
             .css_classes(["mpris-artist"])
             .ellipsize(gtk4::pango::EllipsizeMode::End)
+            .opacity(if state.mpris.has_player { 0.85 } else { 0.4 })
             .build();
 
+        let source_text = if state.mpris.has_player {
+            format!("● {}", state.mpris.player_name)
+        } else {
+            "● MPRIS IDLE".to_string()
+        };
         let source_lbl = gtk4::Label::builder()
-            .label(&format!("● {}", state.mpris.player_name.to_uppercase()))
+            .label(&source_text)
             .halign(gtk4::Align::Start)
             .css_classes(["mpris-source"])
+            .opacity(if state.mpris.has_player { 1.0 } else { 0.4 })
             .build();
 
         info_box.append(&title_lbl);
         info_box.append(&artist_lbl);
         info_box.append(&source_lbl);
 
-        // Control Buttons (Prev, Play/Pause, Next) via DBus
+        // Control Buttons
         let controls = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .spacing(4)
@@ -68,6 +77,7 @@ impl MprisCard {
         let prev_btn = gtk4::Button::builder()
             .icon_name("media-skip-backward-symbolic")
             .css_classes(["mpris-btn"])
+            .sensitive(state.mpris.has_player)
             .build();
         prev_btn.connect_clicked(|_| {
             MprisService::previous();
@@ -76,6 +86,7 @@ impl MprisCard {
         let play_btn = gtk4::Button::builder()
             .icon_name(if state.mpris.is_playing { "media-playback-pause-symbolic" } else { "media-playback-start-symbolic" })
             .css_classes(["mpris-btn", "play-pause-btn"])
+            .sensitive(state.mpris.has_player)
             .build();
         play_btn.connect_clicked(|_| {
             MprisService::play_pause();
@@ -84,6 +95,7 @@ impl MprisCard {
         let next_btn = gtk4::Button::builder()
             .icon_name("media-skip-forward-symbolic")
             .css_classes(["mpris-btn"])
+            .sensitive(state.mpris.has_player)
             .build();
         next_btn.connect_clicked(|_| {
             MprisService::next();
@@ -97,34 +109,37 @@ impl MprisCard {
         top_row.append(&info_box);
         top_row.append(&controls);
 
-        // Scrubber / Progress Bar Row
-        let progress_box = gtk4::Box::builder()
-            .orientation(gtk4::Orientation::Horizontal)
-            .spacing(8)
-            .valign(gtk4::Align::Center)
-            .build();
-
-        let time_cur = gtk4::Label::builder()
-            .label("03:42")
-            .css_classes(["mpris-timestamp"])
-            .build();
-
-        let progress_bar = gtk4::ProgressBar::builder()
-            .fraction(0.58)
-            .hexpand(true)
-            .build();
-
-        let time_total = gtk4::Label::builder()
-            .label("06:21")
-            .css_classes(["mpris-timestamp"])
-            .build();
-
-        progress_box.append(&time_cur);
-        progress_box.append(&progress_bar);
-        progress_box.append(&time_total);
-
         card.append(&top_row);
-        card.append(&progress_box);
+
+        // Scrubber / Progress Bar Row (only if player is active)
+        if state.mpris.has_player {
+            let progress_box = gtk4::Box::builder()
+                .orientation(gtk4::Orientation::Horizontal)
+                .spacing(8)
+                .valign(gtk4::Align::Center)
+                .build();
+
+            let time_cur = gtk4::Label::builder()
+                .label("0:00")
+                .css_classes(["mpris-timestamp"])
+                .build();
+
+            let progress_bar = gtk4::ProgressBar::builder()
+                .fraction(0.0)
+                .hexpand(true)
+                .build();
+
+            let time_total = gtk4::Label::builder()
+                .label("--:--")
+                .css_classes(["mpris-timestamp"])
+                .build();
+
+            progress_box.append(&time_cur);
+            progress_box.append(&progress_bar);
+            progress_box.append(&time_total);
+
+            card.append(&progress_box);
+        }
 
         Self { widget: card }
     }

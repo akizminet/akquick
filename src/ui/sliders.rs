@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use crate::services::{AudioService, BacklightService, SystemState};
+use crate::services::{AudioService, SystemState};
 
 pub struct SlidersSection {
     pub widget: gtk4::Box,
@@ -12,13 +12,14 @@ impl SlidersSection {
             .spacing(10)
             .build();
 
-        // 1. Sound Output
+        // 1. Real Sound Output from PipeWire
         let sound_box = Self::create_slider_row(
             "Sound Output",
-            "Focusrite DAC",
-            if state.audio.volume_muted { "audio-volume-muted-symbolic" } else { "audio-volume-high-symbolic" },
             &state.audio.sink_name,
+            if state.audio.volume_muted { "audio-volume-muted-symbolic" } else { "audio-volume-high-symbolic" },
+            &state.audio.sink_desc,
             state.audio.volume_percent,
+            true, // enabled
             None,
             Some(|| {
                 AudioService::toggle_volume_mute();
@@ -28,39 +29,33 @@ impl SlidersSection {
             },
         );
 
-        // 2. Input Level
+        // 2. Real Input Level
         let mic_box = Self::create_slider_row(
             "Input Level",
-            "Shure MV7 USB",
-            if state.audio.mic_muted { "microphone-sensitivity-muted-symbolic" } else { "audio-input-microphone-symbolic" },
-            &state.audio.source_name,
-            state.audio.mic_percent,
+            if state.audio.has_input_device { &state.audio.source_name } else { "Disconnected" },
+            if state.audio.mic_muted || !state.audio.has_input_device {
+                "microphone-sensitivity-muted-symbolic"
+            } else {
+                "audio-input-microphone-symbolic"
+            },
+            if state.audio.has_input_device { &state.audio.source_desc } else { "No Microphone Detected" },
+            if state.audio.has_input_device { state.audio.mic_percent } else { 0 },
+            state.audio.has_input_device, // only enabled if mic connected!
             Some("secondary-scale"),
-            Some(|| {
-                AudioService::toggle_mic_mute();
-            }),
+            if state.audio.has_input_device {
+                Some(|| {
+                    AudioService::toggle_mic_mute();
+                })
+            } else {
+                None
+            },
             |val| {
                 AudioService::set_mic_volume(val as u32);
             },
         );
 
-        // 3. Brightness
-        let bright_box = Self::create_slider_row(
-            "Display Brightness",
-            "Studio Display 5K",
-            "display-brightness-symbolic",
-            "Studio Display 5K",
-            state.brightness_percent,
-            None,
-            None::<fn()>,
-            |val| {
-                BacklightService::set(val as u32);
-            },
-        );
-
         container.append(&sound_box);
         container.append(&mic_box);
-        container.append(&bright_box);
 
         Self { widget: container }
     }
@@ -71,6 +66,7 @@ impl SlidersSection {
         icon: &str,
         slider_label: &str,
         current_val: u32,
+        enabled: bool,
         scale_class: Option<&str>,
         on_icon_click: Option<M>,
         on_change: F,
@@ -117,7 +113,7 @@ impl SlidersSection {
         let icon_img = gtk4::Image::builder()
             .icon_name(icon)
             .pixel_size(18)
-            .opacity(0.85)
+            .opacity(if enabled { 0.85 } else { 0.4 })
             .build();
 
         if let Some(on_click) = on_icon_click {
@@ -125,6 +121,7 @@ impl SlidersSection {
                 .child(&icon_img)
                 .has_frame(false)
                 .css_classes(["mpris-btn"])
+                .sensitive(enabled)
                 .build();
             icon_btn.connect_clicked(move |_| {
                 on_click();
@@ -137,12 +134,14 @@ impl SlidersSection {
         let name_lbl = gtk4::Label::builder()
             .label(slider_label)
             .css_classes(["toggle-subtitle"])
+            .opacity(if enabled { 1.0 } else { 0.5 })
             .build();
 
         let scale = gtk4::Scale::with_range(gtk4::Orientation::Horizontal, 0.0, 100.0, 1.0);
         scale.set_value(current_val as f64);
         scale.set_hexpand(true);
         scale.set_draw_value(false);
+        scale.set_sensitive(enabled);
 
         if let Some(cls) = scale_class {
             scale.add_css_class(cls);
@@ -151,6 +150,7 @@ impl SlidersSection {
         let val_label = gtk4::Label::builder()
             .label(&format!("{}%", current_val))
             .css_classes(["slider-value"])
+            .opacity(if enabled { 1.0 } else { 0.4 })
             .build();
 
         let val_label_clone = val_label.clone();

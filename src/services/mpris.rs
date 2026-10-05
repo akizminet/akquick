@@ -27,8 +27,9 @@ trait MediaPlayerControl {
     fn metadata(&self) -> zbus::Result<HashMap<String, OwnedValue>>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MprisState {
+    pub has_player: bool,
     pub title: String,
     pub artist: String,
     pub player_name: String,
@@ -36,23 +37,18 @@ pub struct MprisState {
     pub active_bus_name: Option<String>,
 }
 
-impl Default for MprisState {
-    fn default() -> Self {
-        Self {
-            title: "Solaris".to_string(),
-            artist: "Carbon Based Lifeforms".to_string(),
-            player_name: "SPOTIFY WAYLAND MPRIS".to_string(),
-            is_playing: true,
-            active_bus_name: None,
-        }
-    }
-}
-
 pub struct MprisService;
 
 impl MprisService {
     pub async fn fetch() -> MprisState {
-        let mut state = MprisState::default();
+        let mut state = MprisState {
+            has_player: false,
+            title: "No Media Playing".to_string(),
+            artist: "Audio Idle".to_string(),
+            player_name: "MPRIS".to_string(),
+            is_playing: false,
+            active_bus_name: None,
+        };
 
         let conn = match zbus::Connection::session().await {
             Ok(c) => c,
@@ -65,36 +61,57 @@ impl MprisService {
         };
 
         if let Ok(names) = dbus_proxy.list_names().await {
-            for name in names {
-                if name.starts_with("org.mpris.MediaPlayer2.") {
-                    let bus_name: String = name.to_string();
+            // Prefer actual music players first (spotify, vlc, mpv, etc.) over browser tabs
+            let mut sorted_names: Vec<String> = names
+                .into_iter()
+                .filter(|n| n.starts_with("org.mpris.MediaPlayer2."))
+                .map(|n| n.to_string())
+                .collect();
 
-                    if let Ok(builder) = MediaPlayerControlProxy::builder(&conn).destination(bus_name.as_str()) {
-                        if let Ok(player) = builder.build().await {
-                            if let Ok(meta) = player.metadata().await {
-                                if let Some(t_val) = meta.get("xesam:title") {
-                                    let s = t_val.to_string();
-                                    let cleaned = s.trim_matches('"');
-                                    if !cleaned.is_empty() {
-                                        state.title = cleaned.to_string();
-                                    }
-                                }
-                                if let Some(a_val) = meta.get("xesam:artist") {
-                                    let s = a_val.to_string();
-                                    let cleaned = s
-                                        .trim_start_matches('[')
-                                        .trim_end_matches(']')
-                                        .trim_matches('"')
-                                        .trim();
-                                    if !cleaned.is_empty() {
-                                        state.artist = cleaned.to_string();
-                                    }
+            sorted_names.sort_by_key(|n| {
+                if n.contains("spotify") || n.contains("mpv") || n.contains("vlc") || n.contains("celluloid") {
+                    0
+                } else {
+                    1
+                }
+            });
+
+            for bus_name in sorted_names {
+                if let Ok(builder) = MediaPlayerControlProxy::builder(&conn).destination(bus_name.as_str()) {
+                    if let Ok(player) = builder.build().await {
+                        let status = player.playback_status().await.unwrap_or_else(|_| "Stopped".into());
+                        let is_playing = status == "Playing";
+
+                        let mut title = String::new();
+                        let mut artist = String::new();
+
+                        if let Ok(meta) = player.metadata().await {
+                            if let Some(t_val) = meta.get("xesam:title") {
+                                let s = t_val.to_string();
+                                let cleaned = s.trim_matches('"').trim();
+                                if !cleaned.is_empty() {
+                                    title = cleaned.to_string();
                                 }
                             }
-
-                            if let Ok(status) = player.playback_status().await {
-                                state.is_playing = status == "Playing";
+                            if let Some(a_val) = meta.get("xesam:artist") {
+                                let s = a_val.to_string();
+                                let cleaned = s
+                                    .trim_start_matches('[')
+                                    .trim_end_matches(']')
+                                    .trim_matches('"')
+                                    .trim();
+                                if !cleaned.is_empty() {
+                                    artist = cleaned.to_string();
+                                }
                             }
+                        }
+
+                        // Only consider it an active player if it is playing or has track title
+                        if !title.is_empty() || is_playing {
+                            state.has_player = true;
+                            state.title = if title.is_empty() { "Unknown Title".into() } else { title };
+                            state.artist = if artist.is_empty() { "Unknown Artist".into() } else { artist };
+                            state.is_playing = is_playing;
 
                             if let Ok(id_builder) = MediaPlayerProxy::builder(&conn).destination(bus_name.as_str()) {
                                 if let Ok(id_proxy) = id_builder.build().await {

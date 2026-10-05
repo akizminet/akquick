@@ -13,43 +13,38 @@ impl FooterBar {
             .css_classes(["footer-bar"])
             .build();
 
-        // Left: Battery indicator (from UPower DBus)
+        // Left: Real Desktop CPU & RAM telemetry
         let left_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
-            .spacing(6)
+            .spacing(8)
             .hexpand(true)
             .halign(gtk4::Align::Start)
             .build();
 
-        let bat_icon = gtk4::Image::builder()
-            .icon_name(if state.battery.is_charging {
-                "battery-level-80-charging-symbolic"
-            } else {
-                "battery-level-80-symbolic"
-            })
-            .pixel_size(16)
+        let cpu_label = gtk4::Label::builder()
+            .label(&format!("💻 CPU: {}%", state.telemetry.cpu_percent))
             .build();
 
-        let bat_label = gtk4::Label::builder()
-            .label(&format!("{}% ({})", state.battery.percentage, state.battery.time_remaining))
+        let ram_label = gtk4::Label::builder()
+            .label(&format!("🧠 RAM: {:.1} GiB / {:.1} GiB", state.telemetry.ram_used_gib, state.telemetry.ram_total_gib))
             .build();
 
-        left_box.append(&bat_icon);
-        left_box.append(&bat_label);
+        left_box.append(&cpu_label);
+        left_box.append(&ram_label);
 
-        // Right: Profile indicator
+        // Right: Desktop Hostname
         let right_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .spacing(6)
             .halign(gtk4::Align::End)
             .build();
 
-        let profile_label = gtk4::Label::builder()
-            .label(&format!("● Profile: {}", state.power_mode))
+        let host_label = gtk4::Label::builder()
+            .label(&format!("● {}", state.telemetry.hostname))
             .css_classes(["profile-badge"])
             .build();
 
-        right_box.append(&profile_label);
+        right_box.append(&host_label);
 
         footer.append(&left_box);
         footer.append(&right_box);

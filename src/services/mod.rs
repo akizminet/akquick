@@ -1,18 +1,16 @@
 pub mod actions;
 pub mod audio;
-pub mod backlight;
-pub mod battery;
 pub mod bluetooth;
 pub mod mpris;
 pub mod network;
+pub mod telemetry;
 
 pub use actions::ActionService;
 pub use audio::{AudioService, AudioState};
-pub use backlight::BacklightService;
-pub use battery::{BatteryService, BatteryState};
 pub use bluetooth::{BluetoothService, BluetoothState};
 pub use mpris::{MprisService, MprisState};
 pub use network::{NetworkService, NetworkState};
+pub use telemetry::{TelemetryService, TelemetryState};
 
 use std::process::Command;
 
@@ -22,11 +20,9 @@ pub struct SystemState {
     pub network: NetworkState,
     pub bluetooth: BluetoothState,
     pub mpris: MprisState,
-    pub battery: BatteryState,
-    pub brightness_percent: u32,
+    pub telemetry: TelemetryState,
     pub dnd_active: bool,
     pub night_light_active: bool,
-    pub power_mode: String,
     pub dark_active: bool,
 }
 
@@ -38,15 +34,14 @@ impl SystemState {
             .expect("Failed to create Tokio runtime");
 
         rt.block_on(async {
-            let (network, bluetooth, mpris, battery) = tokio::join!(
+            let (network, bluetooth, mpris) = tokio::join!(
                 NetworkService::fetch(),
                 BluetoothService::fetch(),
                 MprisService::fetch(),
-                BatteryService::fetch(),
             );
 
             let audio = AudioService::fetch();
-            let brightness_percent = BacklightService::fetch();
+            let telemetry = TelemetryService::fetch();
 
             let night_light_active = Command::new("pgrep")
                 .arg("-x")
@@ -60,11 +55,9 @@ impl SystemState {
                 network,
                 bluetooth,
                 mpris,
-                battery,
-                brightness_percent,
+                telemetry,
                 dnd_active: false,
                 night_light_active,
-                power_mode: "Balanced".to_string(),
                 dark_active: true,
             }
         })

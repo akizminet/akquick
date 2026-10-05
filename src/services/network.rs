@@ -30,6 +30,7 @@ pub struct NetworkState {
     pub wifi_enabled: bool,
     pub wifi_ssid: String,
     pub vpn_active: bool,
+    pub vpn_name: String,
 }
 
 pub struct NetworkService;
@@ -37,9 +38,10 @@ pub struct NetworkService;
 impl NetworkService {
     pub async fn fetch() -> NetworkState {
         let mut state = NetworkState {
-            wifi_enabled: true,
+            wifi_enabled: false,
             wifi_ssid: "Disconnected".to_string(),
             vpn_active: false,
+            vpn_name: "Disconnected".to_string(),
         };
 
         let conn = match zbus::Connection::system().await {
@@ -68,6 +70,7 @@ impl NetworkService {
                             state.wifi_enabled = true;
                         } else if conn_type == "vpn" || conn_type == "wireguard" || conn_type == "tun" {
                             state.vpn_active = true;
+                            state.vpn_name = id;
                         }
                     }
                 }
