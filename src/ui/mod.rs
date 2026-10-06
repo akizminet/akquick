@@ -41,17 +41,15 @@ impl QuickSettingsWindow {
             .css_classes(["quicksettings-window"])
             .build();
 
-        // Layer-Shell Configuration
+        // Layer-Shell Configuration: Fullscreen transparent surface to capture outside clicks
         window.init_layer_shell();
         window.set_layer(Layer::Top);
         window.set_namespace("akquick");
         window.set_anchor(Edge::Top, true);
+        window.set_anchor(Edge::Bottom, true);
+        window.set_anchor(Edge::Left, true);
         window.set_anchor(Edge::Right, true);
-        window.set_margin(Edge::Top, 42);
-        window.set_margin(Edge::Right, 16);
-
-        // Allow keyboard focus if needed, or leave normal
-        window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::None);
+        window.set_keyboard_mode(gtk4_layer_shell::KeyboardMode::OnDemand);
 
         // Fetch live state
         let t_state_start = std::time::Instant::now();
@@ -147,7 +145,62 @@ impl QuickSettingsWindow {
         stack.add_named(&vpn_page.widget, Some("vpn"));
         stack.set_visible_child_name("main");
 
-        window.set_child(Some(&stack));
+        // Position card in top-right with margin below status bar
+        let root_box = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .hexpand(true)
+            .vexpand(true)
+            .halign(gtk4::Align::End)
+            .valign(gtk4::Align::Start)
+            .margin_top(8)
+            .margin_end(16)
+            .build();
+        root_box.append(&stack);
+
+        window.set_child(Some(&root_box));
+
+        // Auto-dismiss on click outside the card
+        let gesture = gtk4::GestureClick::new();
+        gesture.set_propagation_phase(gtk4::PropagationPhase::Bubble);
+        let win_ref = window.clone();
+        let stack_ref = stack.clone();
+        gesture.connect_pressed(move |_gesture, _n_press, x, y| {
+            if let Some((local_x, local_y)) = win_ref.translate_coordinates(&stack_ref, x, y) {
+                let width = stack_ref.width() as f64;
+                let height = stack_ref.height() as f64;
+                if local_x >= 0.0 && local_x <= width && local_y >= 0.0 && local_y <= height {
+                    return;
+                }
+            }
+            win_ref.set_visible(false);
+        });
+        window.add_controller(gesture);
+
+        // Escape key to dismiss
+        let key_controller = gtk4::EventControllerKey::new();
+        let win_key = window.clone();
+        key_controller.connect_key_pressed(move |_, keyval, _, _| {
+            if keyval == gtk4::gdk::Key::Escape {
+                win_key.set_visible(false);
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
+            }
+        });
+        window.add_controller(key_controller);
+
+        // Auto-dismiss on loss of focus (e.g. clicking other monitor or switching windows)
+        let win_focus = window.clone();
+        let was_active = std::rc::Rc::new(std::cell::Cell::new(false));
+        let was_active_clone = was_active.clone();
+        window.connect_is_active_notify(move |win| {
+            if win.is_active() {
+                was_active_clone.set(true);
+            } else if was_active_clone.get() && win.is_visible() {
+                was_active_clone.set(false);
+                win_focus.set_visible(false);
+            }
+        });
 
         let t_widgets_done = std::time::Instant::now();
 
@@ -282,7 +335,34 @@ impl QuickSettingsWindow {
         });
     }
 
+    pub fn update_active_monitor(&self) {
+        if let Some(display) = gtk4::gdk::Display::default() {
+            let focused_name = std::process::Command::new("hyprctl")
+                .args(["monitors", "-j"])
+                .output()
+                .ok()
+                .and_then(|out| {
+                    let json: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+                    json.as_array()?.iter().find(|m| m.get("focused") == Some(&serde_json::Value::Bool(true)))
+                        .and_then(|m| m.get("name")?.as_str().map(|s| s.to_string()))
+                });
+
+            if let Some(name) = focused_name {
+                let monitors = display.monitors();
+                for i in 0..monitors.n_items() {
+                    if let Some(monitor) = monitors.item(i).and_downcast::<gtk4::gdk::Monitor>() {
+                        if monitor.connector().as_deref() == Some(&name) {
+                            self.window.set_monitor(&monitor);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub fn open_page(&self, page_name: &str) {
+        self.update_active_monitor();
         self.refresh();
         if page_name == "wifi" {
             self.refresh_wifi();
@@ -296,6 +376,7 @@ impl QuickSettingsWindow {
         if self.window.is_visible() {
             self.window.set_visible(false);
         } else {
+            self.update_active_monitor();
             self.refresh();
             self.window.set_visible(true);
             self.window.present();
