@@ -1,4 +1,7 @@
+use gtk4::glib;
 use gtk4::prelude::*;
+use std::cell::Cell;
+use std::rc::Rc;
 use crate::services::{NetworkService, NetworkState, SystemState, WifiAccessPoint};
 
 pub struct WifiPage {
@@ -8,6 +11,7 @@ pub struct WifiPage {
     pub list_header: gtk4::Label,
     pub master_switch: gtk4::Switch,
     pub scan_btn: gtk4::Button,
+    pub is_updating: Rc<Cell<bool>>,
 }
 
 impl WifiPage {
@@ -59,12 +63,18 @@ impl WifiPage {
         title_box.append(&title_lbl);
         title_box.append(&sub_lbl);
 
+        let is_updating = Rc::new(Cell::new(false));
+        let is_updating_switch = is_updating.clone();
+
         let master_switch = gtk4::Switch::builder()
             .active(state.network.wifi_enabled)
             .valign(gtk4::Align::Center)
             .build();
-        master_switch.connect_active_notify(|s| {
-            NetworkService::set_wifi_enabled(s.is_active());
+        master_switch.connect_state_set(move |_s, active| {
+            if !is_updating_switch.get() {
+                NetworkService::set_wifi_enabled(active);
+            }
+            glib::Propagation::Proceed
         });
 
         header.append(&back_btn);
@@ -208,6 +218,7 @@ impl WifiPage {
             list_header,
             master_switch,
             scan_btn,
+            is_updating,
         };
 
         page.update(&state.network);
@@ -215,7 +226,11 @@ impl WifiPage {
     }
 
     pub fn update(&self, network: &NetworkState) {
-        self.master_switch.set_active(network.wifi_enabled);
+        if self.master_switch.is_active() != network.wifi_enabled {
+            self.is_updating.set(true);
+            self.master_switch.set_active(network.wifi_enabled);
+            self.is_updating.set(false);
+        }
         self.scan_btn.set_label("Scan for Networks");
         self.scan_btn.set_sensitive(true);
 

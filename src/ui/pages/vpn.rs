@@ -454,12 +454,13 @@ impl VpnPage {
                 .build();
 
             let p_name = name.clone();
-            sw.connect_active_notify(move |s| {
-                if s.is_active() {
+            sw.connect_state_set(move |_s, active| {
+                if active {
                     NetworkService::connect_vpn(&p_name);
                 } else {
                     NetworkService::disconnect_vpn(&p_name);
                 }
+                gtk4::glib::Propagation::Proceed
             });
 
             row.append(&icon);

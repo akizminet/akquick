@@ -63,8 +63,9 @@ impl BluetoothPage {
             .active(state.bluetooth.enabled)
             .valign(gtk4::Align::Center)
             .build();
-        master_switch.connect_active_notify(|s| {
-            BluetoothService::set_enabled(s.is_active());
+        master_switch.connect_state_set(|_s, active| {
+            BluetoothService::set_enabled(active);
+            gtk4::glib::Propagation::Proceed
         });
 
         header.append(&back_btn);
