@@ -88,7 +88,7 @@ impl QuickSettingsWindow {
             stack_wifi.set_visible_child_name("wifi");
             let tx = wifi_tx.clone();
             crate::services::mpris::MPRIS_RT.spawn(async move {
-                let net = crate::services::NetworkService::fetch_with_scan().await;
+                let net = crate::services::NetworkService::fetch_with_cached_aps().await;
                 let _ = tx.send(AppUpdate::FullWifi(net));
             });
         };
@@ -116,8 +116,6 @@ impl QuickSettingsWindow {
         let on_scan = move || {
             let tx = scan_tx.clone();
             crate::services::mpris::MPRIS_RT.spawn(async move {
-                let _ = std::process::Command::new("nmcli").args(["dev", "wifi", "rescan"]).output();
-                tokio::time::sleep(std::time::Duration::from_millis(800)).await;
                 let net = crate::services::NetworkService::fetch_with_scan().await;
                 let _ = tx.send(AppUpdate::FullWifi(net));
             });
@@ -305,7 +303,7 @@ impl QuickSettingsWindow {
                 let _ = tx.send(AppUpdate::Status { mpris, network, audio });
 
                 if should_refresh_wifi {
-                    let net = crate::services::NetworkService::fetch_with_scan().await;
+                    let net = crate::services::NetworkService::fetch_with_cached_aps().await;
                     let _ = tx.send(AppUpdate::FullWifi(net));
                 }
             });
@@ -339,7 +337,7 @@ impl QuickSettingsWindow {
     pub fn refresh_wifi(&self) {
         let tx = self.poll_tx.clone();
         crate::services::mpris::MPRIS_RT.spawn(async move {
-            let net = crate::services::NetworkService::fetch_with_scan().await;
+            let net = crate::services::NetworkService::fetch_with_cached_aps().await;
             let _ = tx.send(AppUpdate::FullWifi(net));
         });
     }

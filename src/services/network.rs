@@ -123,7 +123,13 @@ impl NetworkService {
         Self::fetch_internal(false).await
     }
 
+    pub async fn fetch_with_cached_aps() -> NetworkState {
+        Self::fetch_internal(true).await
+    }
+
     pub async fn fetch_with_scan() -> NetworkState {
+        let _ = Command::new("nmcli").args(["dev", "wifi", "rescan"]).output();
+        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
         Self::fetch_internal(true).await
     }
 
@@ -200,10 +206,10 @@ impl NetworkService {
         state
     }
 
-    pub fn scan_wifi_sync() -> Vec<WifiAccessPoint> {
+    fn query_nmcli_wifi_list(rescan_mode: &str) -> Vec<WifiAccessPoint> {
         let mut list: Vec<WifiAccessPoint> = Vec::new();
         if let Ok(out) = Command::new("nmcli")
-            .args(["-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list", "--rescan", "auto"])
+            .args(["-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list", "--rescan", rescan_mode])
             .output()
         {
             let s = String::from_utf8_lossy(&out.stdout);
@@ -236,8 +242,17 @@ impl NetworkService {
                 }
             }
         }
-        // Sort visible networks by signal strength descending
         list.sort_by(|a, b| b.signal.cmp(&a.signal));
+        list
+    }
+
+    pub fn scan_wifi_sync() -> Vec<WifiAccessPoint> {
+        // Read cached Access Points from NetworkManager without issuing hardware radio scans
+        let mut list = Self::query_nmcli_wifi_list("no");
+        if list.is_empty() {
+            // Only fallback to automatic scan if cache is completely empty (e.g. freshly enabled radio)
+            list = Self::query_nmcli_wifi_list("auto");
+        }
         list
     }
 
