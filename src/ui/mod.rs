@@ -13,6 +13,7 @@ pub enum AppUpdate {
     Status {
         mpris: crate::services::MprisState,
         network: crate::services::NetworkStatus,
+        audio: crate::services::AudioState,
     },
     FullWifi(crate::services::NetworkState),
 }
@@ -24,6 +25,8 @@ pub struct QuickSettingsWindow {
     pub mpris: std::rc::Rc<mpris::MprisCard>,
     #[allow(dead_code)]
     pub toggles: std::rc::Rc<toggles::ToggleGrid>,
+    #[allow(dead_code)]
+    pub sliders: std::rc::Rc<sliders::SlidersSection>,
     #[allow(dead_code)]
     pub wifi_page: std::rc::Rc<pages::WifiPage>,
     pub poll_tx: std::sync::mpsc::Sender<AppUpdate>,
@@ -98,7 +101,7 @@ impl QuickSettingsWindow {
         ));
         main_card.append(&toggles.widget);
 
-        let sliders = sliders::SlidersSection::new(&state);
+        let sliders = std::rc::Rc::new(sliders::SlidersSection::new(&state));
         main_card.append(&sliders.widget);
 
         let mpris = std::rc::Rc::new(mpris::MprisCard::new(&state));
@@ -253,9 +256,10 @@ impl QuickSettingsWindow {
             glib::ControlFlow::Continue
         });
 
-        // Live Reactive Polling Ticker (every 500ms) for MPRIS + Network & VPN
+        // Live Reactive Polling Ticker (every 500ms) for MPRIS + Network & VPN + Audio
         let mpris_card = mpris.clone();
         let toggles_card = toggles.clone();
+        let sliders_card = sliders.clone();
         let wifi_card = wifi_page.clone();
         let tx_fetch = poll_tx.clone();
         let stack_poll = stack.clone();
@@ -265,9 +269,11 @@ impl QuickSettingsWindow {
         glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
             while let Ok(data) = rx.try_recv() {
                 match data {
-                    AppUpdate::Status { mpris, network } => {
+                    AppUpdate::Status { mpris, network, audio } => {
                         mpris_card.update(&mpris);
                         toggles_card.update_network(&network);
+                        toggles_card.update_audio(&audio);
+                        sliders_card.update_audio(&audio);
 
                         // If Wi-Fi SSID changed (e.g. disconnected or switched AP), auto-refresh wifi page
                         if network.wifi_ssid != last_ssid {
@@ -291,11 +297,12 @@ impl QuickSettingsWindow {
             let should_refresh_wifi = is_wifi_open && (ticker_count % 8 == 0);
 
             crate::services::mpris::MPRIS_RT.spawn(async move {
-                let (mpris, network) = tokio::join!(
+                let (mpris, network, audio) = tokio::join!(
                     crate::services::MprisService::fetch(),
                     crate::services::NetworkService::fetch_status(),
+                    async { crate::services::AudioService::fetch() },
                 );
-                let _ = tx.send(AppUpdate::Status { mpris, network });
+                let _ = tx.send(AppUpdate::Status { mpris, network, audio });
 
                 if should_refresh_wifi {
                     let net = crate::services::NetworkService::fetch_with_scan().await;
@@ -311,6 +318,7 @@ impl QuickSettingsWindow {
             stack,
             mpris,
             toggles,
+            sliders,
             wifi_page,
             poll_tx,
         }
@@ -319,11 +327,12 @@ impl QuickSettingsWindow {
     pub fn refresh(&self) {
         let tx = self.poll_tx.clone();
         crate::services::mpris::MPRIS_RT.spawn(async move {
-            let (mpris, network) = tokio::join!(
+            let (mpris, network, audio) = tokio::join!(
                 crate::services::MprisService::fetch(),
                 crate::services::NetworkService::fetch_status(),
+                async { crate::services::AudioService::fetch() },
             );
-            let _ = tx.send(AppUpdate::Status { mpris, network });
+            let _ = tx.send(AppUpdate::Status { mpris, network, audio });
         });
     }
 

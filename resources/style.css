@@ -234,6 +234,28 @@ window.quicksettings-window {
     background-color: @surface-container-highest;
 }
 
+.quick-mute-btn.is-muted {
+    background-color: alpha(@error-container, 0.7);
+    color: @on-error-container;
+}
+
+.quick-mute-btn.is-muted:hover {
+    background-color: @error-container;
+}
+
+.capsule-slider.is-muted highlight {
+    background-color: alpha(@outline-variant, 0.25);
+}
+
+.capsule-percentage.is-muted {
+    color: @on-surface-variant;
+    opacity: 0.6;
+}
+
+.toggle-pill.is-muted {
+    border-color: alpha(@error-container, 0.6);
+}
+
 
 /* 4. MPRIS Media Player Card */
 .mpris-card {
