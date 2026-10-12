@@ -37,6 +37,8 @@ pub fn try_handle_cli(args: &[String]) -> Option<glib::ExitCode> {
         Some(IpcCommand::StatusIcons)
     } else if args.iter().any(|a| a == "--status-wifi") {
         Some(IpcCommand::StatusWifi)
+    } else if args.iter().any(|a| a == "--status-bt" || a == "--status-bluetooth") {
+        Some(IpcCommand::StatusBt)
     } else if args.iter().any(|a| a == "--status-net" || a == "--status-speed") {
         Some(IpcCommand::StatusNet)
     } else if args.iter().any(|a| a == "--status-audio") {

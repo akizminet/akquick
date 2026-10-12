@@ -50,17 +50,20 @@ impl IpcServer {
                                         lock.as_ref()
                                             .and_then(|g| g.as_ref())
                                             .map(|st| st.format_icons_only())
-                                            .unwrap_or_else(|| "󰤨  󰕾  󰍬".to_string())
+                                            .unwrap_or_else(|| "󰤨  󰂯  󰕾  󰍬".to_string())
                                     }
                                     IpcCommand::StatusJson => {
                                         let lock = LATEST_STATUS.read().ok();
                                         if let Some(Some(st)) = lock.as_deref() {
                                             format!(
-                                                r#"{{"wifi_icon":"{}","wifi_name":"{}","down_speed":"{}","up_speed":"{}","audio_icon":"{}","audio_volume":{},"audio_muted":{},"mic_icon":"{}","mic_volume":{},"mic_muted":{}}}"#,
+                                                r#"{{"wifi_icon":"{}","wifi_name":"{}","down_speed":"{}","up_speed":"{}","bt_icon":"{}","bt_enabled":{},"bt_connected":{},"audio_icon":"{}","audio_volume":{},"audio_muted":{},"mic_icon":"{}","mic_volume":{},"mic_muted":{}}}"#,
                                                 st.wifi_icon,
                                                 st.wifi_name,
                                                 st.down_speed,
                                                 st.up_speed,
+                                                st.bt_icon,
+                                                st.bt_enabled,
+                                                st.bt_connected,
                                                 st.audio_icon,
                                                 st.audio_vol,
                                                 st.audio_muted,
@@ -78,6 +81,14 @@ impl IpcServer {
                                             format!("{} {}", st.wifi_icon, st.wifi_name)
                                         } else {
                                             "󰤨 Wi-Fi".to_string()
+                                        }
+                                    }
+                                    IpcCommand::StatusBt => {
+                                        let lock = LATEST_STATUS.read().ok();
+                                        if let Some(Some(st)) = lock.as_deref() {
+                                            st.bt_icon.to_string()
+                                        } else {
+                                            "󰂯".to_string()
                                         }
                                     }
                                     IpcCommand::StatusNet => {

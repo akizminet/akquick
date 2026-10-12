@@ -14,6 +14,7 @@ pub enum AppUpdate {
         mpris: crate::services::MprisState,
         network: crate::services::NetworkStatus,
         audio: crate::services::AudioState,
+        bluetooth: crate::services::BluetoothState,
         cpu_percent: u32,
         ram_used_gib: f32,
         ram_total_gib: f32,
@@ -65,7 +66,7 @@ impl QuickSettingsWindow {
         let t_state_done = std::time::Instant::now();
 
         // Update cached status immediately for IPC socket queries
-        let init_status = crate::status::FullStatus::from_components(&(&state.network).into(), &state.audio);
+        let init_status = crate::status::FullStatus::from_components(&(&state.network).into(), &state.audio, &state.bluetooth);
         crate::ipc::update_cached_status(init_status);
 
         // Communication channel between Tokio async runtime and GTK main thread
@@ -277,12 +278,13 @@ impl QuickSettingsWindow {
         glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
             while let Ok(data) = rx.try_recv() {
                 match data {
-                    AppUpdate::Status { mpris, network, audio, cpu_percent, ram_used_gib, ram_total_gib } => {
-                        let full_status = crate::status::FullStatus::from_components(&network, &audio);
+                    AppUpdate::Status { mpris, network, audio, bluetooth, cpu_percent, ram_used_gib, ram_total_gib } => {
+                        let full_status = crate::status::FullStatus::from_components(&network, &audio, &bluetooth);
                         crate::ipc::update_cached_status(full_status);
                         mpris_card.update(&mpris);
                         toggles_card.update_network(&network);
                         toggles_card.update_audio(&audio);
+                        toggles_card.update_bluetooth(&bluetooth);
                         sliders_card.update_audio(&audio);
                         footer_card.update(cpu_percent, ram_used_gib, ram_total_gib);
 
@@ -308,10 +310,11 @@ impl QuickSettingsWindow {
             let should_refresh_wifi = is_wifi_open && (ticker_count % 8 == 0);
 
             crate::services::mpris::MPRIS_RT.spawn(async move {
-                let (mpris, network, audio) = tokio::join!(
+                let (mpris, network, audio, bluetooth) = tokio::join!(
                     crate::services::MprisService::fetch(),
                     crate::services::NetworkService::fetch_status(),
                     async { crate::services::AudioService::fetch() },
+                    crate::services::BluetoothService::fetch(),
                 );
                 let cpu_percent = crate::services::TelemetryService::fetch_cpu();
                 let (ram_used_gib, ram_total_gib) = crate::services::TelemetryService::fetch_ram();
@@ -319,6 +322,7 @@ impl QuickSettingsWindow {
                     mpris,
                     network,
                     audio,
+                    bluetooth,
                     cpu_percent,
                     ram_used_gib,
                     ram_total_gib,
@@ -348,10 +352,11 @@ impl QuickSettingsWindow {
     pub fn refresh(&self) {
         let tx = self.poll_tx.clone();
         crate::services::mpris::MPRIS_RT.spawn(async move {
-            let (mpris, network, audio) = tokio::join!(
+            let (mpris, network, audio, bluetooth) = tokio::join!(
                 crate::services::MprisService::fetch(),
                 crate::services::NetworkService::fetch_status(),
                 async { crate::services::AudioService::fetch() },
+                crate::services::BluetoothService::fetch(),
             );
             let cpu_percent = crate::services::TelemetryService::fetch_cpu();
             let (ram_used_gib, ram_total_gib) = crate::services::TelemetryService::fetch_ram();
@@ -359,6 +364,7 @@ impl QuickSettingsWindow {
                 mpris,
                 network,
                 audio,
+                bluetooth,
                 cpu_percent,
                 ram_used_gib,
                 ram_total_gib,

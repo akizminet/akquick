@@ -1,4 +1,4 @@
-use crate::services::{AudioService, NetworkService};
+use crate::services::{AudioService, BluetoothService, BluetoothState, NetworkService, NetworkStatus};
 use std::io::Write;
 
 pub struct FullStatus {
@@ -6,6 +6,9 @@ pub struct FullStatus {
     pub wifi_name: String,
     pub down_speed: String,
     pub up_speed: String,
+    pub bt_icon: &'static str,
+    pub bt_enabled: bool,
+    pub bt_connected: bool,
     pub audio_icon: &'static str,
     pub audio_vol: u32,
     pub audio_muted: bool,
@@ -16,7 +19,11 @@ pub struct FullStatus {
 }
 
 impl FullStatus {
-    pub fn from_components(network: &crate::services::NetworkStatus, audio: &crate::services::AudioState) -> Self {
+    pub fn from_components(
+        network: &NetworkStatus,
+        audio: &crate::services::AudioState,
+        bluetooth: &BluetoothState,
+    ) -> Self {
         let (wifi_icon, raw_wifi_name) = if network.primary_is_ethernet || network.ethernet_connected {
             ("󰈀", if network.ethernet_name.is_empty() { "Ethernet".to_string() } else { network.ethernet_name.clone() })
         } else if !network.wifi_enabled {
@@ -32,6 +39,14 @@ impl FullStatus {
             format!("{}…", truncated)
         } else {
             raw_wifi_name
+        };
+
+        let (bt_icon, bt_connected) = if !bluetooth.enabled {
+            ("󰂲", false)
+        } else if bluetooth.connected_count > 0 {
+            ("󰂱", true)
+        } else {
+            ("󰂯", false)
         };
 
         let audio_icon = if audio.volume_muted || audio.volume_percent == 0 {
@@ -57,6 +72,9 @@ impl FullStatus {
             wifi_name,
             down_speed,
             up_speed,
+            bt_icon,
+            bt_enabled: bluetooth.enabled,
+            bt_connected,
             audio_icon,
             audio_vol: audio.volume_percent,
             audio_muted: audio.volume_muted,
@@ -68,11 +86,12 @@ impl FullStatus {
     }
 
     pub async fn fetch() -> Self {
-        let (network, audio) = tokio::join!(
+        let (network, audio, bluetooth) = tokio::join!(
             NetworkService::fetch_status(),
             async { AudioService::fetch() },
+            BluetoothService::fetch(),
         );
-        Self::from_components(&network, &audio)
+        Self::from_components(&network, &audio, &bluetooth)
     }
 
     pub fn format_full(&self) -> String {
@@ -91,13 +110,13 @@ impl FullStatus {
         };
 
         format!(
-            "{} {}  ⬇{} ⬆{}  {}  {}",
-            self.wifi_icon, self.wifi_name, self.down_speed, self.up_speed, audio_str, mic_str
+            "{} {}  ⬇{} ⬆{}  {}  {}  {}",
+            self.wifi_icon, self.wifi_name, self.down_speed, self.up_speed, self.bt_icon, audio_str, mic_str
         )
     }
 
     pub fn format_icons_only(&self) -> String {
-        format!("{}  {}  {}", self.wifi_icon, self.audio_icon, self.mic_icon)
+        format!("{}  {}  {}  {}", self.wifi_icon, self.bt_icon, self.audio_icon, self.mic_icon)
     }
 }
 
@@ -105,6 +124,7 @@ pub fn handle_cli(args: &[String]) -> Option<glib::ExitCode> {
     let is_full_status = args.iter().any(|a| a == "--status" || a == "-s" || a == "--status-full");
     let is_icons = args.iter().any(|a| a == "--status-icons");
     let is_wifi = args.iter().any(|a| a == "--status-wifi");
+    let is_bt = args.iter().any(|a| a == "--status-bt" || a == "--status-bluetooth");
     let is_net = args.iter().any(|a| a == "--status-net" || a == "--status-speed");
     let is_audio = args.iter().any(|a| a == "--status-audio");
     let is_mic = args.iter().any(|a| a == "--status-mic");
@@ -112,7 +132,7 @@ pub fn handle_cli(args: &[String]) -> Option<glib::ExitCode> {
     let is_watch = args.iter().any(|a| a == "--watch" || a == "-w");
     let is_watch_icons = args.iter().any(|a| a == "--watch-icons");
 
-    if !(is_full_status || is_icons || is_wifi || is_net || is_audio || is_mic || is_json || is_watch || is_watch_icons) {
+    if !(is_full_status || is_icons || is_wifi || is_bt || is_net || is_audio || is_mic || is_json || is_watch || is_watch_icons) {
         return None;
     }
 
@@ -144,11 +164,14 @@ pub fn handle_cli(args: &[String]) -> Option<glib::ExitCode> {
 
         if is_json {
             println!(
-                r#"{{"wifi_icon":"{}","wifi_name":"{}","down_speed":"{}","up_speed":"{}","audio_icon":"{}","audio_volume":{},"audio_muted":{},"mic_icon":"{}","mic_volume":{},"mic_muted":{}}}"#,
+                r#"{{"wifi_icon":"{}","wifi_name":"{}","down_speed":"{}","up_speed":"{}","bt_icon":"{}","bt_enabled":{},"bt_connected":{},"audio_icon":"{}","audio_volume":{},"audio_muted":{},"mic_icon":"{}","mic_volume":{},"mic_muted":{}}}"#,
                 status.wifi_icon,
                 status.wifi_name,
                 status.down_speed,
                 status.up_speed,
+                status.bt_icon,
+                status.bt_enabled,
+                status.bt_connected,
                 status.audio_icon,
                 status.audio_vol,
                 status.audio_muted,
@@ -160,6 +183,8 @@ pub fn handle_cli(args: &[String]) -> Option<glib::ExitCode> {
             println!("{}", status.format_icons_only());
         } else if is_wifi {
             println!("{} {}", status.wifi_icon, status.wifi_name);
+        } else if is_bt {
+            println!("{}", status.bt_icon);
         } else if is_net {
             println!("⬇{} ⬆{}", status.down_speed, status.up_speed);
         } else if is_audio {
@@ -177,7 +202,7 @@ pub fn handle_cli(args: &[String]) -> Option<glib::ExitCode> {
                 println!("{} {}%", status.mic_icon, status.mic_vol);
             }
         } else {
-            // Default: full status with wifi name, speed, output volume, mic volume
+            // Default: full status with wifi name, speed, bluetooth, output volume, mic volume
             println!("{}", status.format_full());
         }
     });

@@ -370,6 +370,20 @@ impl ToggleGrid {
         }
     }
 
+    pub fn update_bluetooth(&self, bt: &crate::services::BluetoothState) {
+        self.is_bt.set(bt.enabled);
+        if !bt.enabled {
+            self.bt_box.remove_css_class("active-primary");
+            self.bt_sub.set_label("Off");
+        } else if bt.connected_count > 0 {
+            self.bt_box.add_css_class("active-primary");
+            self.bt_sub.set_label(&format!("{} Connected", bt.connected_count));
+        } else {
+            self.bt_box.remove_css_class("active-primary");
+            self.bt_sub.set_label("No Devices");
+        }
+    }
+
     fn create_split_pill<FT, FD>(
         icon: &str,
         title: &str,
