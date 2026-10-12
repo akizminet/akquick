@@ -1,6 +1,5 @@
-use zbus::proxy;
 use std::collections::HashMap;
-use std::process::Command;
+use zbus::proxy;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
 type ManagedObjects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, OwnedValue>>>;
@@ -12,6 +11,24 @@ type ManagedObjects = HashMap<OwnedObjectPath, HashMap<String, HashMap<String, O
 )]
 trait ObjectManager {
     fn get_managed_objects(&self) -> zbus::Result<ManagedObjects>;
+}
+
+#[proxy(
+    default_service = "org.bluez",
+    interface = "org.bluez.Adapter1"
+)]
+trait Adapter1 {
+    #[zbus(property)]
+    fn set_powered(&self, value: bool) -> zbus::Result<()>;
+}
+
+#[proxy(
+    default_service = "org.bluez",
+    interface = "org.bluez.Device1"
+)]
+trait Device1 {
+    fn connect(&self) -> zbus::Result<()>;
+    fn disconnect(&self) -> zbus::Result<()>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -94,15 +111,42 @@ impl BluetoothService {
     }
 
     pub fn set_enabled(enabled: bool) {
-        let arg = if enabled { "on" } else { "off" };
-        let _ = Command::new("bluetoothctl").args(["power", arg]).spawn();
+        crate::services::mpris::MPRIS_RT.spawn(async move {
+            if let Ok(conn) = zbus::Connection::system().await {
+                if let Ok(builder) = Adapter1Proxy::builder(&conn).path("/org/bluez/hci0") {
+                    if let Ok(adapter) = builder.build().await {
+                        let _ = adapter.set_powered(enabled).await;
+                    }
+                }
+            }
+        });
     }
 
     pub fn connect_device(address: &str) {
-        let _ = Command::new("bluetoothctl").args(["connect", address]).spawn();
+        let addr = address.to_string();
+        crate::services::mpris::MPRIS_RT.spawn(async move {
+            let path = format!("/org/bluez/hci0/dev_{}", addr.replace(':', "_"));
+            if let Ok(conn) = zbus::Connection::system().await {
+                if let Ok(builder) = Device1Proxy::builder(&conn).path(path) {
+                    if let Ok(device) = builder.build().await {
+                        let _ = device.connect().await;
+                    }
+                }
+            }
+        });
     }
 
     pub fn disconnect_device(address: &str) {
-        let _ = Command::new("bluetoothctl").args(["disconnect", address]).spawn();
+        let addr = address.to_string();
+        crate::services::mpris::MPRIS_RT.spawn(async move {
+            let path = format!("/org/bluez/hci0/dev_{}", addr.replace(':', "_"));
+            if let Ok(conn) = zbus::Connection::system().await {
+                if let Ok(builder) = Device1Proxy::builder(&conn).path(path) {
+                    if let Ok(device) = builder.build().await {
+                        let _ = device.disconnect().await;
+                    }
+                }
+            }
+        });
     }
 }

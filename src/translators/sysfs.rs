@@ -24,7 +24,16 @@ pub fn read_backlight_percent() -> Option<u32> {
     None
 }
 
-/// Set backlight brightness directly via sysfs or fallback
+#[zbus::proxy(
+    default_service = "org.freedesktop.login1",
+    default_path = "/org/freedesktop/login1/session/auto",
+    interface = "org.freedesktop.login1.Session"
+)]
+trait LogindSession {
+    fn set_brightness(&self, subsystem: &str, name: &str, brightness: u32) -> zbus::Result<()>;
+}
+
+/// Set backlight brightness directly via sysfs or systemd-logind D-Bus (zero external tools)
 #[allow(dead_code)]
 pub fn set_backlight_percent(percent: u32) {
     let base = Path::new("/sys/class/backlight");
@@ -48,9 +57,27 @@ pub fn set_backlight_percent(percent: u32) {
     }
 
     if !written {
-        // Fallback to brightnessctl if direct sysfs write requires root
-        let arg = format!("{}%", percent.min(100));
-        let _ = std::process::Command::new("brightnessctl").args(["set", &arg]).spawn();
+        let pct = percent.min(100);
+        if let Ok(entries) = fs::read_dir(base) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let max_p = entry.path().join("max_brightness");
+                if let Ok(max_s) = fs::read_to_string(max_p) {
+                    if let Ok(max) = max_s.trim().parse::<f64>() {
+                        let target = ((pct as f64 / 100.0) * max).round() as u32;
+                        let dev_name = name.clone();
+                        crate::services::mpris::MPRIS_RT.spawn(async move {
+                            if let Ok(conn) = zbus::Connection::system().await {
+                                if let Ok(session) = LogindSessionProxy::new(&conn).await {
+                                    let _ = session.set_brightness("backlight", &dev_name, target).await;
+                                }
+                            }
+                        });
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
