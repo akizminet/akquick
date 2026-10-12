@@ -275,6 +275,7 @@ impl QuickSettingsWindow {
 
         glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
             while let Ok(data) = rx.try_recv() {
+                match data {
                     AppUpdate::Status { mpris, network, audio, battery, cpu_percent } => {
                         let full_status = crate::status::FullStatus::from_components(&network, &audio);
                         crate::ipc::update_cached_status(full_status);

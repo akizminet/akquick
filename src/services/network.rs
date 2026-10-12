@@ -99,6 +99,9 @@ pub struct NetworkStatus {
 impl From<&NetworkState> for NetworkStatus {
     fn from(s: &NetworkState) -> Self {
         Self {
+            primary_is_ethernet: s.primary_is_ethernet,
+            ethernet_connected: s.ethernet.connected,
+            ethernet_name: s.ethernet.name.clone(),
             wifi_enabled: s.wifi_enabled,
             wifi_ssid: s.wifi_ssid.clone(),
             vpn_active: s.vpn_active,
