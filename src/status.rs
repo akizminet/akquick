@@ -23,7 +23,9 @@ impl FullStatus {
             async { AudioService::fetch() },
         );
 
-        let (wifi_icon, raw_wifi_name) = if !network.wifi_enabled {
+        let (wifi_icon, raw_wifi_name) = if network.primary_is_ethernet || network.ethernet_connected {
+            ("󰈀", if network.ethernet_name.is_empty() { "Ethernet".to_string() } else { network.ethernet_name })
+        } else if !network.wifi_enabled {
             ("󰤭", "Wi-Fi Off".to_string())
         } else if network.wifi_ssid.is_empty() || network.wifi_ssid == "Disconnected" {
             ("󰤮", "Disconnected".to_string())

@@ -12,6 +12,7 @@ pub struct WifiPage {
     pub master_switch: gtk4::Switch,
     pub scan_btn: gtk4::Button,
     pub is_updating: Rc<Cell<bool>>,
+    pub sub_lbl: gtk4::Label,
 }
 
 impl WifiPage {
@@ -219,6 +220,7 @@ impl WifiPage {
             master_switch,
             scan_btn,
             is_updating,
+            sub_lbl,
         };
 
         page.update(&state.network);
@@ -234,12 +236,30 @@ impl WifiPage {
         self.scan_btn.set_label("Scan for Networks");
         self.scan_btn.set_sensitive(true);
 
+        // Dynamic interface subtitle
+        if network.primary_is_ethernet || network.ethernet.connected {
+            let iface_name = if !network.ethernet.interface.is_empty() {
+                &network.ethernet.interface
+            } else {
+                "enp3s0"
+            };
+            self.sub_lbl.set_label(&format!("Interface: {} (Ethernet)", iface_name));
+        } else if !network.wifi_ssid.is_empty() && network.wifi_ssid != "Disconnected" {
+            self.sub_lbl.set_label("Interface: Wi-Fi (Connected)");
+        } else {
+            self.sub_lbl.set_label("Interface: Wi-Fi");
+        }
+
         // 1. Rebuild Connected Network Card
         while let Some(child) = self.connected_card_container.first_child() {
             self.connected_card_container.remove(&child);
         }
 
-        if network.wifi_enabled && network.wifi_ssid != "Disconnected" && !network.wifi_ssid.is_empty() {
+        if network.primary_is_ethernet || network.ethernet.connected {
+            let card = Self::build_ethernet_card(network);
+            self.connected_card_container.append(&card);
+            self.connected_card_container.set_visible(true);
+        } else if network.wifi_enabled && network.wifi_ssid != "Disconnected" && !network.wifi_ssid.is_empty() {
             let card = Self::build_connected_card(network);
             self.connected_card_container.append(&card);
             self.connected_card_container.set_visible(true);
@@ -289,6 +309,180 @@ impl WifiPage {
         }
 
         self.list_header.set_label(&format!("VISIBLE NETWORKS ({})", count));
+    }
+
+    fn build_ethernet_card(network: &NetworkState) -> gtk4::Box {
+        let card = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .spacing(10)
+            .css_classes(["subpage-card"])
+            .build();
+
+        let badge_box = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .spacing(6)
+            .build();
+
+        let badge = gtk4::Label::builder()
+            .label("● CONNECTED ETHERNET")
+            .css_classes(["subpage-badge"])
+            .halign(gtk4::Align::Start)
+            .hexpand(true)
+            .build();
+
+        let speed_str = if network.ethernet.speed_mbps > 0 {
+            format!("{} Mbps", network.ethernet.speed_mbps)
+        } else {
+            "1000 Mbps".to_string()
+        };
+        let speed_badge = gtk4::Label::builder()
+            .label(&speed_str)
+            .css_classes(["wifi-speed-pill"])
+            .halign(gtk4::Align::End)
+            .build();
+
+        badge_box.append(&badge);
+        badge_box.append(&speed_badge);
+        card.append(&badge_box);
+
+        let main_row = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .spacing(12)
+            .valign(gtk4::Align::Center)
+            .build();
+
+        let icon_box = gtk4::Box::builder()
+            .css_classes(["wifi-icon-primary"])
+            .build();
+        let icon = gtk4::Image::builder()
+            .icon_name("network-wired-symbolic")
+            .pixel_size(22)
+            .build();
+        icon_box.append(&icon);
+
+        let info_box = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .spacing(2)
+            .hexpand(true)
+            .build();
+
+        let name_lbl = gtk4::Label::builder()
+            .label(if !network.ethernet.name.is_empty() {
+                &network.ethernet.name
+            } else if !network.ethernet.interface.is_empty() {
+                &network.ethernet.interface
+            } else {
+                "Ethernet Connection"
+            })
+            .halign(gtk4::Align::Start)
+            .css_classes(["subpage-title"])
+            .build();
+
+        let sec_row = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .spacing(6)
+            .build();
+
+        let iface_chip = gtk4::Label::builder()
+            .label(if !network.ethernet.interface.is_empty() {
+                &network.ethernet.interface
+            } else {
+                "enp3s0"
+            })
+            .css_classes(["wifi-chip"])
+            .build();
+
+        let type_chip = gtk4::Label::builder()
+            .label("Wired")
+            .css_classes(["wifi-chip"])
+            .build();
+
+        let state_lbl = gtk4::Label::builder()
+            .label("● Connected")
+            .css_classes(["wifi-sig-label"])
+            .build();
+
+        sec_row.append(&iface_chip);
+        sec_row.append(&type_chip);
+        sec_row.append(&state_lbl);
+
+        info_box.append(&name_lbl);
+        info_box.append(&sec_row);
+
+        let glyphs_box = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Horizontal)
+            .spacing(4)
+            .build();
+
+        let gear_btn = gtk4::Button::builder()
+            .icon_name("emblem-system-symbolic")
+            .tooltip_text("Configure Network")
+            .css_classes(["subpage-glyph-btn"])
+            .build();
+        gear_btn.connect_clicked(|_| {
+            let _ = std::process::Command::new("nm-connection-editor").spawn();
+        });
+
+        glyphs_box.append(&gear_btn);
+
+        main_row.append(&icon_box);
+        main_row.append(&info_box);
+        main_row.append(&glyphs_box);
+        card.append(&main_row);
+
+        let ip_box = gtk4::Grid::builder()
+            .column_spacing(8)
+            .column_homogeneous(true)
+            .css_classes(["vpn-traffic-box"])
+            .build();
+
+        let ip_vbox = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .spacing(2)
+            .build();
+        let ip_head = gtk4::Label::builder()
+            .label("IPV4 ADDRESS")
+            .css_classes(["vpn-traffic-header"])
+            .halign(gtk4::Align::Start)
+            .build();
+        let ip_val = gtk4::Label::builder()
+            .label(if !network.ethernet.ip.is_empty() {
+                &network.ethernet.ip
+            } else {
+                "10.0.1.211"
+            })
+            .css_classes(["vpn-traffic-val"])
+            .halign(gtk4::Align::Start)
+            .build();
+        ip_vbox.append(&ip_head);
+        ip_vbox.append(&ip_val);
+
+        let gw_vbox = gtk4::Box::builder()
+            .orientation(gtk4::Orientation::Vertical)
+            .spacing(2)
+            .build();
+        let gw_head = gtk4::Label::builder()
+            .label("GATEWAY / DNS")
+            .css_classes(["vpn-traffic-header"])
+            .halign(gtk4::Align::Start)
+            .build();
+        let gw_val = gtk4::Label::builder()
+            .label(if !network.ethernet.gateway.is_empty() {
+                &network.ethernet.gateway
+            } else {
+                "10.0.1.1"
+            })
+            .css_classes(["vpn-traffic-val"])
+            .halign(gtk4::Align::Start)
+            .build();
+        gw_vbox.append(&gw_head);
+        gw_vbox.append(&gw_val);
+
+        ip_box.attach(&ip_vbox, 0, 0, 1, 1);
+        ip_box.attach(&gw_vbox, 1, 0, 1, 1);
+        card.append(&ip_box);
+
+        card
     }
 
     fn build_connected_card(network: &NetworkState) -> gtk4::Box {

@@ -10,6 +10,8 @@ pub struct ToggleGrid {
     pub is_vpn: Rc<Cell<bool>>,
     pub wifi_box: gtk4::Box,
     pub wifi_sub: gtk4::Label,
+    pub wifi_title: gtk4::Label,
+    pub wifi_icon: gtk4::Image,
     pub is_wifi: Rc<Cell<bool>>,
     #[allow(dead_code)]
     pub bt_box: gtk4::Box,
@@ -44,15 +46,41 @@ impl ToggleGrid {
             .css_classes(["toggle-grid"])
             .build();
 
-        // 1. Wi-Fi (Split Pill: Toggle wifi on click, Open Wi-Fi page on chevron)
+        // 1. Wi-Fi / Ethernet (Split Pill: Toggle wifi on click, Open Wi-Fi page on chevron)
+        let is_eth = state.network.primary_is_ethernet || state.network.ethernet.connected;
         let wifi_en = Rc::new(Cell::new(state.network.wifi_enabled));
         let wifi_en_clone = wifi_en.clone();
         let last_ssid = state.network.wifi_ssid.clone();
-        let (wifi_pill, wifi_sub) = Self::create_split_pill(
-            "network-wireless-symbolic",
-            "Wi-Fi",
-            &state.network.wifi_ssid,
-            if state.network.wifi_enabled { Some("active-primary") } else { None },
+        let initial_icon = if is_eth {
+            "network-wired-symbolic"
+        } else {
+            "network-wireless-symbolic"
+        };
+        let initial_title = if is_eth { "Ethernet" } else { "Wi-Fi" };
+        let initial_sub = if is_eth {
+            if !state.network.ethernet.name.is_empty() {
+                state.network.ethernet.name.clone()
+            } else if !state.network.ethernet.interface.is_empty() {
+                state.network.ethernet.interface.clone()
+            } else {
+                "Connected".to_string()
+            }
+        } else {
+            state.network.wifi_ssid.clone()
+        };
+        let initial_active = if is_eth {
+            Some("active-primary")
+        } else if state.network.wifi_enabled && state.network.wifi_ssid != "Disconnected" {
+            Some("active-primary")
+        } else {
+            None
+        };
+
+        let (wifi_pill, wifi_sub, wifi_title, wifi_icon) = Self::create_split_pill(
+            initial_icon,
+            initial_title,
+            &initial_sub,
+            initial_active,
             move |pill, sub, _icon| {
                 let next = !wifi_en_clone.get();
                 wifi_en_clone.set(next);
@@ -76,7 +104,7 @@ impl ToggleGrid {
         };
         let bt_en = Rc::new(Cell::new(state.bluetooth.enabled));
         let bt_en_clone = bt_en.clone();
-        let (bt_pill, bt_sub) = Self::create_split_pill(
+        let (bt_pill, bt_sub, _bt_title, _bt_icon) = Self::create_split_pill(
             "bluetooth-active-symbolic",
             "Bluetooth",
             &bt_sub_text,
@@ -212,7 +240,7 @@ impl ToggleGrid {
             state.network.vpn_name.clone()
         };
         let vpn_id_clone = vpn_id.clone();
-        let (vpn_pill, vpn_sub) = Self::create_split_pill(
+        let (vpn_pill, vpn_sub, _vpn_title, _vpn_icon) = Self::create_split_pill(
             "network-vpn-symbolic",
             "VPN & WG",
             if state.network.vpn_active { &vpn_id } else { "Disconnected" },
@@ -268,6 +296,8 @@ impl ToggleGrid {
             is_vpn,
             wifi_box: wifi_pill,
             wifi_sub,
+            wifi_title,
+            wifi_icon,
             is_wifi: wifi_en,
             bt_box: bt_pill,
             bt_sub,
@@ -291,14 +321,31 @@ impl ToggleGrid {
             self.vpn_sub.set_label("Disconnected");
         }
 
-        // 2. Wi-Fi
+        // 2. Wi-Fi / Ethernet
         self.is_wifi.set(status.wifi_enabled);
-        if status.wifi_enabled && status.wifi_ssid != "Disconnected" {
+        if status.primary_is_ethernet || status.ethernet_connected {
+            self.wifi_title.set_label("Ethernet");
+            self.wifi_icon.set_icon_name(Some("network-wired-symbolic"));
             self.wifi_box.add_css_class("active-primary");
-            self.wifi_sub.set_label(&status.wifi_ssid);
+            let eth_label = if !status.ethernet_name.is_empty() {
+                &status.ethernet_name
+            } else {
+                "Connected"
+            };
+            self.wifi_sub.set_label(eth_label);
         } else {
-            self.wifi_box.remove_css_class("active-primary");
-            self.wifi_sub.set_label("Disconnected");
+            self.wifi_title.set_label("Wi-Fi");
+            self.wifi_icon.set_icon_name(Some("network-wireless-symbolic"));
+            if status.wifi_enabled && status.wifi_ssid != "Disconnected" {
+                self.wifi_box.add_css_class("active-primary");
+                self.wifi_sub.set_label(&status.wifi_ssid);
+            } else if status.wifi_enabled {
+                self.wifi_box.remove_css_class("active-primary");
+                self.wifi_sub.set_label("Disconnected");
+            } else {
+                self.wifi_box.remove_css_class("active-primary");
+                self.wifi_sub.set_label("Off");
+            }
         }
     }
 
@@ -330,7 +377,7 @@ impl ToggleGrid {
         active_class: Option<&str>,
         on_toggle: FT,
         on_drilldown: FD,
-    ) -> (gtk4::Box, gtk4::Label)
+    ) -> (gtk4::Box, gtk4::Label, gtk4::Label, gtk4::Image)
     where
         FT: Fn(&gtk4::Box, &gtk4::Label, &gtk4::Image) + 'static,
         FD: Fn() + 'static,
@@ -411,7 +458,7 @@ impl ToggleGrid {
         pill_box.append(&main_btn);
         pill_box.append(&chevron_btn);
 
-        (pill_box, sub_label)
+        (pill_box, sub_label, title_label, icon_img)
     }
 
     fn create_pill(

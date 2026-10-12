@@ -24,6 +24,9 @@ trait ActiveConnection {
 
     #[zbus(property, name = "Type")]
     fn connection_type(&self) -> zbus::Result<String>;
+
+    #[zbus(property)]
+    fn default(&self) -> zbus::Result<bool>;
 }
 
 #[allow(dead_code)]
@@ -33,6 +36,16 @@ pub struct WifiAccessPoint {
     pub signal: u32,
     pub security: String,
     pub in_use: bool,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct EthernetDetails {
+    pub connected: bool,
+    pub name: String,
+    pub interface: String,
+    pub ip: String,
+    pub gateway: String,
+    pub speed_mbps: u32,
 }
 
 #[allow(dead_code)]
@@ -59,6 +72,8 @@ pub struct VpnProfile {
 
 #[derive(Debug, Clone, Default)]
 pub struct NetworkState {
+    pub primary_is_ethernet: bool,
+    pub ethernet: EthernetDetails,
     pub wifi_enabled: bool,
     pub wifi_ssid: String,
     pub wifi_ip: String,
@@ -72,6 +87,9 @@ pub struct NetworkState {
 
 #[derive(Debug, Clone, Default)]
 pub struct NetworkStatus {
+    pub primary_is_ethernet: bool,
+    pub ethernet_connected: bool,
+    pub ethernet_name: String,
     pub wifi_enabled: bool,
     pub wifi_ssid: String,
     pub vpn_active: bool,
@@ -83,6 +101,9 @@ pub struct NetworkService;
 impl NetworkService {
     pub async fn fetch_status() -> NetworkStatus {
         let mut status = NetworkStatus {
+            primary_is_ethernet: false,
+            ethernet_connected: false,
+            ethernet_name: String::new(),
             wifi_enabled: false,
             wifi_ssid: "Disconnected".to_string(),
             vpn_active: false,
@@ -101,15 +122,45 @@ impl NetworkService {
                             if let Ok(ac) = builder.build().await {
                                 let conn_type = ac.connection_type().await.unwrap_or_default();
                                 let id = ac.id().await.unwrap_or_default();
+                                let is_default = ac.default().await.unwrap_or(false);
 
-                                if conn_type == "802-11-wireless" {
+                                if conn_type == "802-3-ethernet" || conn_type == "ethernet" {
+                                    status.ethernet_connected = true;
+                                    status.ethernet_name = id;
+                                    if is_default || !status.primary_is_ethernet {
+                                        status.primary_is_ethernet = true;
+                                    }
+                                } else if conn_type == "802-11-wireless" {
                                     status.wifi_ssid = id;
                                     status.wifi_enabled = true;
+                                    if is_default {
+                                        status.primary_is_ethernet = false;
+                                    }
                                 } else if conn_type == "vpn" || conn_type == "wireguard" {
                                     status.vpn_active = true;
                                     status.vpn_name = id;
                                 }
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback for nmcli query
+        if !status.ethernet_connected && status.wifi_ssid == "Disconnected" {
+            if let Ok(out) = Command::new("nmcli").args(["-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "dev"]).output() {
+                let s = String::from_utf8_lossy(&out.stdout);
+                for line in s.lines() {
+                    let parts: Vec<&str> = line.split(':').collect();
+                    if parts.len() >= 4 && parts[2] == "connected" {
+                        if parts[1] == "ethernet" {
+                            status.ethernet_connected = true;
+                            status.ethernet_name = if !parts[3].is_empty() { parts[3].to_string() } else { parts[0].to_string() };
+                            status.primary_is_ethernet = true;
+                        } else if parts[1] == "wifi" && status.wifi_ssid == "Disconnected" {
+                            status.wifi_ssid = parts[3].to_string();
+                            status.wifi_enabled = true;
                         }
                     }
                 }
@@ -135,6 +186,8 @@ impl NetworkService {
 
     async fn fetch_internal(scan: bool) -> NetworkState {
         let mut state = NetworkState {
+            primary_is_ethernet: false,
+            ethernet: EthernetDetails::default(),
             wifi_enabled: false,
             wifi_ssid: "Disconnected".to_string(),
             wifi_ip: String::new(),
@@ -146,37 +199,32 @@ impl NetworkService {
             scanned_aps: Vec::new(),
         };
 
-        if let Ok(conn) = zbus::Connection::system().await {
-            if let Ok(nm) = NetworkManagerProxy::new(&conn).await {
-                if let Ok(enabled) = nm.wireless_enabled().await {
-                    state.wifi_enabled = enabled;
-                }
+        let status = Self::fetch_status().await;
+        state.primary_is_ethernet = status.primary_is_ethernet;
+        state.ethernet.connected = status.ethernet_connected;
+        state.ethernet.name = status.ethernet_name.clone();
+        state.wifi_enabled = status.wifi_enabled;
+        state.wifi_ssid = status.wifi_ssid;
+        state.vpn_active = status.vpn_active;
+        state.vpn_name = status.vpn_name;
 
-                if let Ok(active_paths) = nm.active_connections().await {
-                    for path in active_paths {
-                        if let Ok(builder) = ActiveConnectionProxy::builder(&conn).path(path) {
-                            if let Ok(ac) = builder.build().await {
-                                let conn_type = ac.connection_type().await.unwrap_or_default();
-                                let id = ac.id().await.unwrap_or_default();
-
-                                if conn_type == "802-11-wireless" {
-                                    state.wifi_ssid = id;
-                                    state.wifi_enabled = true;
-                                } else if conn_type == "vpn" || conn_type == "wireguard" {
-                                    state.vpn_active = true;
-                                    state.vpn_name = id;
-                                }
-                            }
-                        }
+        // Dynamic interface, IP and gateway discovery
+        let (def_iface, def_ip, def_gw) = Self::get_default_route_info();
+        if state.primary_is_ethernet {
+            state.ethernet.interface = def_iface.clone();
+            state.ethernet.ip = def_ip.clone();
+            state.ethernet.gateway = def_gw.clone();
+            if !def_iface.is_empty() {
+                let speed_path = format!("/sys/class/net/{}/speed", def_iface);
+                if let Ok(spd) = std::fs::read_to_string(&speed_path) {
+                    if let Ok(spd_u) = spd.trim().parse::<u32>() {
+                        state.ethernet.speed_mbps = spd_u;
                     }
                 }
             }
-        }
-
-        // Live Wi-Fi IP and Gateway
-        if state.wifi_enabled && state.wifi_ssid != "Disconnected" {
-            state.wifi_ip = Self::get_interface_ip("wlo1");
-            state.wifi_gateway = Self::get_wifi_gateway();
+        } else if state.wifi_enabled && state.wifi_ssid != "Disconnected" {
+            state.wifi_ip = def_ip;
+            state.wifi_gateway = def_gw;
         }
 
         // Live VPN details
@@ -204,6 +252,29 @@ impl NetworkService {
         }
 
         state
+    }
+
+    pub fn get_default_route_info() -> (String, String, String) {
+        if let Ok(out) = Command::new("ip").args(["route", "get", "1.1.1.1"]).output() {
+            let s = String::from_utf8_lossy(&out.stdout);
+            let mut iface = String::new();
+            let mut ip = String::new();
+            let mut gateway = String::new();
+            let parts: Vec<&str> = s.split_whitespace().collect();
+            for i in 0..parts.len() {
+                if parts[i] == "via" && i + 1 < parts.len() {
+                    gateway = parts[i + 1].to_string();
+                } else if parts[i] == "dev" && i + 1 < parts.len() {
+                    iface = parts[i + 1].to_string();
+                } else if parts[i] == "src" && i + 1 < parts.len() {
+                    ip = parts[i + 1].to_string();
+                }
+            }
+            if !iface.is_empty() {
+                return (iface, ip, gateway);
+            }
+        }
+        (String::new(), String::new(), String::new())
     }
 
     fn query_nmcli_wifi_list(rescan_mode: &str) -> Vec<WifiAccessPoint> {
@@ -300,6 +371,7 @@ impl NetworkService {
         String::new()
     }
 
+    #[allow(dead_code)]
     fn get_wifi_gateway() -> String {
         if let Ok(out) = Command::new("ip").args(["route", "show", "default"]).output() {
             let s = String::from_utf8_lossy(&out.stdout);
