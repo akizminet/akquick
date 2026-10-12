@@ -670,7 +670,10 @@ impl WifiPage {
             .build();
         let forget_ssid = network.wifi_ssid.clone();
         forget_btn.connect_clicked(move |_| {
-            let _ = std::process::Command::new("nmcli").args(["con", "delete", "id", &forget_ssid]).spawn();
+            let id = forget_ssid.clone();
+            crate::services::mpris::MPRIS_RT.spawn(async move {
+                crate::translators::network_manager::delete_connection_by_id(&id).await;
+            });
         });
 
         let disconnect_btn = gtk4::Button::builder()
