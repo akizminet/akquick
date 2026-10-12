@@ -1,11 +1,111 @@
-use std::process::Command;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::mpsc::{channel, Sender};
+use std::sync::LazyLock;
+use std::thread;
 
-static TARGET_SINK_VOL: AtomicU32 = AtomicU32::new(u32::MAX);
-static SINK_WORKER_ACTIVE: AtomicBool = AtomicBool::new(false);
+use crate::translators::pulse::PulseAudioClient;
 
-static TARGET_SOURCE_VOL: AtomicU32 = AtomicU32::new(u32::MAX);
-static SOURCE_WORKER_ACTIVE: AtomicBool = AtomicBool::new(false);
+enum AudioCommand {
+    SetSinkVolume(u32),
+    SetSourceVolume(u32),
+    ToggleSinkMute,
+    ToggleSourceMute,
+    UnmuteSink,
+    UnmuteSource,
+}
+
+static AUDIO_CMD_TX: LazyLock<Sender<AudioCommand>> = LazyLock::new(|| {
+    let (tx, rx) = channel::<AudioCommand>();
+    thread::Builder::new()
+        .name("audio-worker".into())
+        .spawn(move || {
+            let mut client_opt = PulseAudioClient::connect().ok();
+
+            while let Ok(cmd) = rx.recv() {
+                // Ensure client is connected
+                if client_opt.is_none() {
+                    client_opt = PulseAudioClient::connect().ok();
+                }
+
+                let mut latest_sink_vol = None;
+                let mut latest_source_vol = None;
+                let mut pending_toggle_sink_mute = 0;
+                let mut pending_toggle_source_mute = 0;
+                let mut unmute_sink = false;
+                let mut unmute_source = false;
+
+                let apply_cmd = |c: AudioCommand,
+                                 l_sink: &mut Option<u32>,
+                                 l_src: &mut Option<u32>,
+                                 t_sink: &mut usize,
+                                 t_src: &mut usize,
+                                 u_sink: &mut bool,
+                                 u_src: &mut bool| {
+                    match c {
+                        AudioCommand::SetSinkVolume(v) => *l_sink = Some(v),
+                        AudioCommand::SetSourceVolume(v) => *l_src = Some(v),
+                        AudioCommand::ToggleSinkMute => *t_sink += 1,
+                        AudioCommand::ToggleSourceMute => *t_src += 1,
+                        AudioCommand::UnmuteSink => *u_sink = true,
+                        AudioCommand::UnmuteSource => *u_src = true,
+                    }
+                };
+
+                apply_cmd(
+                    cmd,
+                    &mut latest_sink_vol,
+                    &mut latest_source_vol,
+                    &mut pending_toggle_sink_mute,
+                    &mut pending_toggle_source_mute,
+                    &mut unmute_sink,
+                    &mut unmute_source,
+                );
+
+                // Drain coalescing queue to collapse rapid scroll wheel ticks
+                while let Ok(next) = rx.try_recv() {
+                    apply_cmd(
+                        next,
+                        &mut latest_sink_vol,
+                        &mut latest_source_vol,
+                        &mut pending_toggle_sink_mute,
+                        &mut pending_toggle_source_mute,
+                        &mut unmute_sink,
+                        &mut unmute_source,
+                    );
+                }
+
+                if let Some(client) = client_opt.as_mut() {
+                    if let Some(vol) = latest_sink_vol {
+                        let _ = client.set_sink_volume(vol);
+                    }
+
+                    if unmute_sink {
+                        let _ = client.set_sink_mute(false);
+                    } else if pending_toggle_sink_mute % 2 != 0 {
+                        if let Ok((_, _, _, muted)) = client.get_sink_info() {
+                            let _ = client.set_sink_mute(!muted);
+                        }
+                    }
+
+                    if let Some(vol) = latest_source_vol {
+                        let _ = client.set_source_volume(vol);
+                    }
+
+                    if unmute_source {
+                        let _ = client.set_source_mute(false);
+                    } else if pending_toggle_source_mute % 2 != 0 {
+                        if let Ok((_, _, _, muted)) = client.get_source_info() {
+                            let _ = client.set_source_mute(!muted);
+                        }
+                    }
+                } else {
+                    // Try reconnecting next time
+                    client_opt = None;
+                }
+            }
+        })
+        .expect("Failed to spawn audio worker thread");
+    tx
+});
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AudioState {
@@ -26,141 +126,29 @@ impl AudioService {
     pub fn fetch() -> AudioState {
         let mut state = AudioState::default();
 
-        // 1. Output Sink Volume & Mute
-        let mut sink_ok = false;
-        if let Ok(out) = Command::new("wpctl").args(["get-volume", "@DEFAULT_AUDIO_SINK@"]).output() {
-            let s = String::from_utf8_lossy(&out.stdout);
-            if !s.is_empty() && !s.contains("error") && !s.contains("Translate ID error") {
-                let mut parts = s.split_whitespace();
-                if let Some(vol_str) = parts.nth(1) {
-                    if let Ok(vol_f) = vol_str.parse::<f32>() {
-                        state.volume_percent = (vol_f * 100.0).round() as u32;
-                        sink_ok = true;
-                    }
-                }
-                state.volume_muted = s.contains("[MUTED]");
+        if let Ok(mut client) = PulseAudioClient::connect() {
+            if let Ok((name, desc, vol, muted)) = client.get_sink_info() {
+                state.sink_name = if !name.is_empty() { name } else { "Default Output".to_string() };
+                state.sink_desc = if !desc.is_empty() { desc } else { "Audio Sink".to_string() };
+                state.volume_percent = vol;
+                state.volume_muted = muted;
             }
-        }
-        if !sink_ok {
-            if let Ok(out) = Command::new("pactl").args(["get-sink-volume", "@DEFAULT_SINK@"]).output() {
-                let s = String::from_utf8_lossy(&out.stdout);
-                if let Some(pct_str) = s.split('/').nth(1) {
-                    if let Ok(pct) = pct_str.trim().trim_end_matches('%').parse::<u32>() {
-                        state.volume_percent = pct;
-                    }
-                }
-            }
-            if let Ok(out) = Command::new("pactl").args(["get-sink-mute", "@DEFAULT_SINK@"]).output() {
-                let s = String::from_utf8_lossy(&out.stdout);
-                state.volume_muted = s.to_lowercase().contains("yes");
+
+            if let Ok((name, desc, vol, muted)) = client.get_source_info() {
+                state.source_name = if !name.is_empty() { name } else { "Default Input".to_string() };
+                state.source_desc = if !desc.is_empty() { desc } else { "Microphone".to_string() };
+                state.mic_percent = vol;
+                state.mic_muted = muted;
+                state.has_input_device = true;
             }
         }
 
-        // 2. Output Sink Device Name & Description
-        if let Ok(out) = Command::new("wpctl").args(["inspect", "@DEFAULT_AUDIO_SINK@"]).output() {
-            let s = String::from_utf8_lossy(&out.stdout);
-            for line in s.lines() {
-                let line = line.trim();
-                if line.contains("alsa.mixer_name = ") {
-                    if let Some(val) = line.split('"').nth(1) {
-                        state.sink_name = val.to_string();
-                    }
-                } else if line.contains("node.description = ") {
-                    if let Some(val) = line.split('"').nth(1) {
-                        state.sink_desc = val.to_string();
-                    }
-                }
-            }
-        }
-        if state.sink_name.is_empty() || state.sink_desc.is_empty() {
-            if let Ok(out) = Command::new("pactl").args(["get-default-sink"]).output() {
-                let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !name.is_empty() {
-                    state.sink_name = name.split('.').nth(1).unwrap_or(&name).to_string();
-                    state.sink_desc = name;
-                }
-            }
-        }
         if state.sink_name.is_empty() {
             state.sink_name = "Default Output".to_string();
-        }
-        if state.sink_desc.is_empty() {
             state.sink_desc = "Audio Sink".to_string();
         }
 
-        // 3. Input Source Volume & Device
-        if let Ok(out) = Command::new("wpctl").args(["get-volume", "@DEFAULT_AUDIO_SOURCE@"]).output() {
-            let s = String::from_utf8_lossy(&out.stdout);
-            if !s.is_empty() && !s.contains("error") && !s.contains("Translate ID error") {
-                let mut parts = s.split_whitespace();
-                if let Some(vol_str) = parts.nth(1) {
-                    if let Ok(vol_f) = vol_str.parse::<f32>() {
-                        state.mic_percent = (vol_f * 100.0).round() as u32;
-                        state.has_input_device = true;
-                    }
-                }
-                state.mic_muted = s.contains("[MUTED]");
-            }
-        }
-
         if !state.has_input_device {
-            // Fallback to pactl for source volume & mute
-            if let Ok(out) = Command::new("pactl").args(["get-source-volume", "@DEFAULT_SOURCE@"]).output() {
-                let s = String::from_utf8_lossy(&out.stdout);
-                if let Some(pct_str) = s.split('/').nth(1) {
-                    if let Ok(pct) = pct_str.trim().trim_end_matches('%').parse::<u32>() {
-                        state.mic_percent = pct;
-                        state.has_input_device = true;
-                    }
-                }
-            }
-            if let Ok(out) = Command::new("pactl").args(["get-source-mute", "@DEFAULT_SOURCE@"]).output() {
-                let s = String::from_utf8_lossy(&out.stdout);
-                if !s.is_empty() {
-                    state.mic_muted = s.to_lowercase().contains("yes");
-                    state.has_input_device = true;
-                }
-            }
-        }
-
-        if state.has_input_device {
-            if let Ok(out) = Command::new("wpctl").args(["inspect", "@DEFAULT_AUDIO_SOURCE@"]).output() {
-                let s = String::from_utf8_lossy(&out.stdout);
-                for line in s.lines() {
-                    let line = line.trim();
-                    if line.contains("alsa.mixer_name = ") {
-                        if let Some(val) = line.split('"').nth(1) {
-                            state.source_name = val.to_string();
-                        }
-                    } else if line.contains("node.description = ") {
-                        if let Some(val) = line.split('"').nth(1) {
-                            state.source_desc = val.to_string();
-                        }
-                    }
-                }
-            }
-            if state.source_name.is_empty() || state.source_desc.is_empty() {
-                // Fallback inspect description via pactl
-                if let Ok(out) = Command::new("pactl").args(["list", "sources"]).output() {
-                    let s = String::from_utf8_lossy(&out.stdout);
-                    for chunk in s.split("Source #") {
-                        if !chunk.contains("Monitor of") && chunk.contains("Description:") {
-                            for line in chunk.lines() {
-                                let line = line.trim();
-                                if line.starts_with("Description: ") {
-                                    state.source_desc = line.trim_start_matches("Description: ").to_string();
-                                    state.source_name = state.source_desc.clone();
-                                    break;
-                                }
-                            }
-                            if !state.source_desc.is_empty() {
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
             state.source_name = "Disconnected".to_string();
             state.source_desc = "No Microphone Detected".to_string();
         }
@@ -169,124 +157,26 @@ impl AudioService {
     }
 
     pub fn set_volume(percent: u32) {
-        let pct = percent.min(150);
-        TARGET_SINK_VOL.store(pct, Ordering::Release);
-        if !SINK_WORKER_ACTIVE.swap(true, Ordering::AcqRel) {
-            std::thread::spawn(|| {
-                let mut current_applied = u32::MAX;
-                loop {
-                    let target = TARGET_SINK_VOL.load(Ordering::Acquire);
-                    if target != current_applied && target != u32::MAX {
-                        current_applied = target;
-                        let vol_arg = format!("{}%", target);
-                        let res = Command::new("wpctl")
-                            .args(["set-volume", "-l", "1.5", "@DEFAULT_AUDIO_SINK@", &vol_arg])
-                            .status();
-                        if res.is_err() || !res.unwrap().success() {
-                            let _ = Command::new("pactl")
-                                .args(["set-sink-volume", "@DEFAULT_SINK@", &vol_arg])
-                                .status();
-                        }
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(20));
-                    if TARGET_SINK_VOL.load(Ordering::Acquire) == current_applied {
-                        SINK_WORKER_ACTIVE.store(false, Ordering::Release);
-                        if TARGET_SINK_VOL.load(Ordering::Acquire) != current_applied {
-                            if !SINK_WORKER_ACTIVE.swap(true, Ordering::AcqRel) {
-                                continue;
-                            }
-                        }
-                        break;
-                    }
-                }
-            });
-        }
+        let _ = AUDIO_CMD_TX.send(AudioCommand::SetSinkVolume(percent));
     }
 
     pub fn unmute_volume() {
-        std::thread::spawn(|| {
-            let res = Command::new("wpctl")
-                .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
-                .status();
-            if res.is_err() || !res.unwrap().success() {
-                let _ = Command::new("pactl")
-                    .args(["set-sink-mute", "@DEFAULT_SINK@", "0"])
-                    .status();
-            }
-        });
+        let _ = AUDIO_CMD_TX.send(AudioCommand::UnmuteSink);
     }
 
     pub fn toggle_volume_mute() {
-        std::thread::spawn(|| {
-            let res = Command::new("wpctl")
-                .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
-                .status();
-            if res.is_err() || !res.unwrap().success() {
-                let _ = Command::new("pactl")
-                    .args(["set-sink-mute", "@DEFAULT_SINK@", "toggle"])
-                    .status();
-            }
-        });
+        let _ = AUDIO_CMD_TX.send(AudioCommand::ToggleSinkMute);
     }
 
     pub fn set_mic_volume(percent: u32) {
-        let pct = percent.min(100);
-        TARGET_SOURCE_VOL.store(pct, Ordering::Release);
-        if !SOURCE_WORKER_ACTIVE.swap(true, Ordering::AcqRel) {
-            std::thread::spawn(|| {
-                let mut current_applied = u32::MAX;
-                loop {
-                    let target = TARGET_SOURCE_VOL.load(Ordering::Acquire);
-                    if target != current_applied && target != u32::MAX {
-                        current_applied = target;
-                        let vol_arg = format!("{}%", target);
-                        let res = Command::new("wpctl")
-                            .args(["set-volume", "@DEFAULT_AUDIO_SOURCE@", &vol_arg])
-                            .status();
-                        if res.is_err() || !res.unwrap().success() {
-                            let _ = Command::new("pactl")
-                                .args(["set-source-volume", "@DEFAULT_SOURCE@", &vol_arg])
-                                .status();
-                        }
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(20));
-                    if TARGET_SOURCE_VOL.load(Ordering::Acquire) == current_applied {
-                        SOURCE_WORKER_ACTIVE.store(false, Ordering::Release);
-                        if TARGET_SOURCE_VOL.load(Ordering::Acquire) != current_applied {
-                            if !SOURCE_WORKER_ACTIVE.swap(true, Ordering::AcqRel) {
-                                continue;
-                            }
-                        }
-                        break;
-                    }
-                }
-            });
-        }
+        let _ = AUDIO_CMD_TX.send(AudioCommand::SetSourceVolume(percent));
     }
 
     pub fn unmute_mic() {
-        std::thread::spawn(|| {
-            let res = Command::new("wpctl")
-                .args(["set-mute", "@DEFAULT_AUDIO_SOURCE@", "0"])
-                .status();
-            if res.is_err() || !res.unwrap().success() {
-                let _ = Command::new("pactl")
-                    .args(["set-source-mute", "@DEFAULT_SOURCE@", "0"])
-                    .status();
-            }
-        });
+        let _ = AUDIO_CMD_TX.send(AudioCommand::UnmuteSource);
     }
 
     pub fn toggle_mic_mute() {
-        std::thread::spawn(|| {
-            let res = Command::new("wpctl")
-                .args(["set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"])
-                .status();
-            if res.is_err() || !res.unwrap().success() {
-                let _ = Command::new("pactl")
-                    .args(["set-source-mute", "@DEFAULT_SOURCE@", "toggle"])
-                    .status();
-            }
-        });
+        let _ = AUDIO_CMD_TX.send(AudioCommand::ToggleSourceMute);
     }
 }

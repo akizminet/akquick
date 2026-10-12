@@ -16,7 +16,6 @@ pub use mpris::{MprisService, MprisState};
 pub use network::{NetworkService, NetworkState, NetworkStatus, WifiAccessPoint};
 pub use telemetry::{TelemetryService, TelemetryState};
 
-use std::process::Command;
 
 #[derive(Debug, Clone, Default)]
 pub struct SystemState {
@@ -78,12 +77,7 @@ impl SystemState {
                 eprintln!("   -> Battery:   {:>8.2?}", t_bat);
             }
 
-            let night_light_active = Command::new("pgrep")
-                .arg("-x")
-                .arg("hyprsunset")
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
+            let night_light_active = crate::translators::sysfs::is_process_running("hyprsunset");
 
             SystemState {
                 audio,

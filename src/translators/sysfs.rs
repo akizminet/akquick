@@ -180,3 +180,22 @@ pub fn get_network_speed() -> (String, String) {
 
     (format_speed(down_speed), format_speed(up_speed))
 }
+
+/// Check if a process is running by scanning /proc without spawning pgrep
+pub fn is_process_running(proc_name: &str) -> bool {
+    if let Ok(entries) = fs::read_dir("/proc") {
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let name_str = file_name.to_string_lossy();
+            if name_str.chars().all(|c| c.is_ascii_digit()) {
+                let comm_path = entry.path().join("comm");
+                if let Ok(comm) = fs::read_to_string(comm_path) {
+                    if comm.trim() == proc_name {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
