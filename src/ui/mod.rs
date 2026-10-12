@@ -63,6 +63,10 @@ impl QuickSettingsWindow {
         let state = SystemState::fetch();
         let t_state_done = std::time::Instant::now();
 
+        // Update cached status immediately for IPC socket queries
+        let init_status = crate::status::FullStatus::from_components(&(&state.network).into(), &state.audio);
+        crate::ipc::update_cached_status(init_status);
+
         // Communication channel between Tokio async runtime and GTK main thread
         let (poll_tx, rx) = std::sync::mpsc::channel::<AppUpdate>();
 
@@ -271,8 +275,9 @@ impl QuickSettingsWindow {
 
         glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
             while let Ok(data) = rx.try_recv() {
-                match data {
                     AppUpdate::Status { mpris, network, audio, battery, cpu_percent } => {
+                        let full_status = crate::status::FullStatus::from_components(&network, &audio);
+                        crate::ipc::update_cached_status(full_status);
                         mpris_card.update(&mpris);
                         toggles_card.update_network(&network);
                         toggles_card.update_audio(&audio);
@@ -355,16 +360,7 @@ impl QuickSettingsWindow {
 
     pub fn update_active_monitor(&self) {
         if let Some(display) = gtk4::gdk::Display::default() {
-            let focused_name = std::process::Command::new("hyprctl")
-                .args(["monitors", "-j"])
-                .output()
-                .ok()
-                .and_then(|out| {
-                    let json: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-                    json.as_array()?.iter().find(|m| m.get("focused") == Some(&serde_json::Value::Bool(true)))
-                        .and_then(|m| m.get("name")?.as_str().map(|s| s.to_string()))
-                });
-
+            let focused_name = crate::translators::hyprland::get_focused_monitor_name();
             if let Some(name) = focused_name {
                 let monitors = display.monitors();
                 for i in 0..monitors.n_items() {

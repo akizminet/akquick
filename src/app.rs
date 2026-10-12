@@ -2,9 +2,12 @@ use gtk4::prelude::*;
 use gtk4::{gdk, gio};
 use crate::ui::QuickSettingsWindow;
 use std::cell::RefCell;
-use std::rc::Rc;
 
 pub const APP_ID: &str = "dev.akquick.ControlCenter";
+
+thread_local! {
+    static WINDOW_HOLDER: RefCell<Option<QuickSettingsWindow>> = const { RefCell::new(None) };
+}
 
 pub struct App {
     pub app: libadwaita::Application,
@@ -17,9 +20,37 @@ impl App {
             .flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE)
             .build();
 
-        let window_holder: Rc<RefCell<Option<QuickSettingsWindow>>> = Rc::new(RefCell::new(None));
+        // Start pure std Unix socket server, dispatching commands to GTK main thread via idle_add_once
+        let _ = crate::ipc::IpcServer::start(move |cmd| {
+            glib::idle_add_once(move || {
+                WINDOW_HOLDER.with(|wh| {
+                    let wh = wh.borrow();
+                    if let Some(ref win) = *wh {
+                        match cmd {
+                            crate::ipc::IpcCommand::Toggle => {
+                                win.toggle();
+                            }
+                            crate::ipc::IpcCommand::OpenPage(ref page) => {
+                                win.open_page(page);
+                            }
+                            crate::ipc::IpcCommand::Volume(ref arg) => {
+                                if let Ok(pct) = arg.trim_end_matches('%').parse::<u32>() {
+                                    crate::services::AudioService::set_volume(pct);
+                                }
+                            }
+                            crate::ipc::IpcCommand::ToggleVolumeMute => {
+                                crate::services::AudioService::toggle_volume_mute();
+                            }
+                            crate::ipc::IpcCommand::ToggleMicMute => {
+                                crate::services::AudioService::toggle_mic_mute();
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+            });
+        });
 
-        let wh_activate = window_holder.clone();
         app.connect_activate(move |app| {
             // Load CSS styling on display
             if let Some(display) = gdk::Display::default() {
@@ -32,17 +63,18 @@ impl App {
                 );
             }
 
-            let mut wh = wh_activate.borrow_mut();
-            if wh.is_none() {
-                let win = QuickSettingsWindow::new(app, false);
-                win.window.present();
-                *wh = Some(win);
-            } else if let Some(ref win) = *wh {
-                win.toggle();
-            }
+            WINDOW_HOLDER.with(|wh| {
+                let mut wh = wh.borrow_mut();
+                if wh.is_none() {
+                    let win = QuickSettingsWindow::new(app, false);
+                    win.window.present();
+                    *wh = Some(win);
+                } else if let Some(ref win) = *wh {
+                    win.toggle();
+                }
+            });
         });
 
-        let wh_cmd = window_holder.clone();
         app.connect_command_line(move |app, cmd| {
             let args = cmd.arguments();
             let is_bench = args.iter().any(|arg| arg == "--bench" || arg == "-b");
@@ -66,30 +98,32 @@ impl App {
                 );
             }
 
-            let mut wh = wh_cmd.borrow_mut();
-            if wh.is_none() {
-                let win = QuickSettingsWindow::new(app, is_bench);
-                if is_daemon {
-                    std::mem::forget(app.hold());
-                    win.window.set_visible(false);
-                } else if let Some(ref target) = page_target {
-                    win.open_page(target);
-                } else {
-                    win.window.present();
+            WINDOW_HOLDER.with(|wh| {
+                let mut wh = wh.borrow_mut();
+                if wh.is_none() {
+                    let win = QuickSettingsWindow::new(app, is_bench);
+                    if is_daemon {
+                        std::mem::forget(app.hold());
+                        win.window.set_visible(false);
+                    } else if let Some(ref target) = page_target {
+                        win.open_page(target);
+                    } else {
+                        win.window.present();
+                    }
+                    *wh = Some(win);
+                } else if let Some(ref win) = *wh {
+                    if is_daemon {
+                        // Daemon already resident and active
+                    } else if let Some(ref target) = page_target {
+                        win.open_page(target);
+                    } else if has_toggle {
+                        win.toggle();
+                    } else {
+                        win.window.set_visible(true);
+                        win.window.present();
+                    }
                 }
-                *wh = Some(win);
-            } else if let Some(ref win) = *wh {
-                if is_daemon {
-                    // Daemon already resident and active
-                } else if let Some(ref target) = page_target {
-                    win.open_page(target);
-                } else if has_toggle {
-                    win.toggle();
-                } else {
-                    win.window.set_visible(true);
-                    win.window.present();
-                }
-            }
+            });
 
             0
         });

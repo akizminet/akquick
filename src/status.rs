@@ -1,6 +1,5 @@
 use crate::services::{AudioService, NetworkService};
 use std::io::Write;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct FullStatus {
     pub wifi_icon: &'static str,
@@ -17,20 +16,15 @@ pub struct FullStatus {
 }
 
 impl FullStatus {
-    pub async fn fetch() -> Self {
-        let (network, audio) = tokio::join!(
-            NetworkService::fetch_status(),
-            async { AudioService::fetch() },
-        );
-
+    pub fn from_components(network: &crate::services::NetworkStatus, audio: &crate::services::AudioState) -> Self {
         let (wifi_icon, raw_wifi_name) = if network.primary_is_ethernet || network.ethernet_connected {
-            ("󰈀", if network.ethernet_name.is_empty() { "Ethernet".to_string() } else { network.ethernet_name })
+            ("󰈀", if network.ethernet_name.is_empty() { "Ethernet".to_string() } else { network.ethernet_name.clone() })
         } else if !network.wifi_enabled {
             ("󰤭", "Wi-Fi Off".to_string())
         } else if network.wifi_ssid.is_empty() || network.wifi_ssid == "Disconnected" {
             ("󰤮", "Disconnected".to_string())
         } else {
-            ("󰤨", network.wifi_ssid)
+            ("󰤨", network.wifi_ssid.clone())
         };
 
         let wifi_name = if raw_wifi_name.chars().count() > 18 {
@@ -56,7 +50,7 @@ impl FullStatus {
             "󰍬"
         };
 
-        let (down_speed, up_speed) = get_network_speed();
+        let (down_speed, up_speed) = crate::translators::sysfs::get_network_speed();
 
         Self {
             wifi_icon,
@@ -71,6 +65,14 @@ impl FullStatus {
             mic_muted: audio.mic_muted,
             has_mic: audio.has_input_device,
         }
+    }
+
+    pub async fn fetch() -> Self {
+        let (network, audio) = tokio::join!(
+            NetworkService::fetch_status(),
+            async { AudioService::fetch() },
+        );
+        Self::from_components(&network, &audio)
     }
 
     pub fn format_full(&self) -> String {
@@ -97,77 +99,6 @@ impl FullStatus {
     pub fn format_icons_only(&self) -> String {
         format!("{}  {}  {}", self.wifi_icon, self.audio_icon, self.mic_icon)
     }
-}
-
-fn get_total_rx_tx() -> (u64, u64) {
-    let mut total_rx = 0u64;
-    let mut total_tx = 0u64;
-
-    if let Ok(content) = std::fs::read_to_string("/proc/net/dev") {
-        for line in content.lines() {
-            if let Some(pos) = line.find(':') {
-                let name = line[..pos].trim();
-                if name != "lo" {
-                    let parts: Vec<&str> = line[pos + 1..].split_whitespace().collect();
-                    if parts.len() >= 9 {
-                        let rx = parts[0].parse::<u64>().unwrap_or(0);
-                        let tx = parts[8].parse::<u64>().unwrap_or(0);
-                        total_rx += rx;
-                        total_tx += tx;
-                    }
-                }
-            }
-        }
-    }
-    (total_rx, total_tx)
-}
-
-fn format_speed(bytes_per_sec: f64) -> String {
-    if bytes_per_sec >= 1024.0 * 1024.0 * 1024.0 {
-        format!("{:.1}G", bytes_per_sec / (1024.0 * 1024.0 * 1024.0))
-    } else if bytes_per_sec >= 1024.0 * 1024.0 {
-        format!("{:.1}M", bytes_per_sec / (1024.0 * 1024.0))
-    } else if bytes_per_sec >= 1024.0 {
-        format!("{:.0}K", bytes_per_sec / 1024.0)
-    } else {
-        "0K".to_string()
-    }
-}
-
-fn get_network_speed() -> (String, String) {
-    let now_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
-
-    let (curr_rx, curr_tx) = get_total_rx_tx();
-    let stat_file = "/dev/shm/akquick_net_stat";
-
-    let mut down_speed = 0.0;
-    let mut up_speed = 0.0;
-
-    if let Ok(content) = std::fs::read_to_string(stat_file) {
-        let parts: Vec<&str> = content.trim().split_whitespace().collect();
-        if parts.len() == 3 {
-            if let (Ok(prev_time), Ok(prev_rx), Ok(prev_tx)) = (
-                parts[0].parse::<u64>(),
-                parts[1].parse::<u64>(),
-                parts[2].parse::<u64>(),
-            ) {
-                if now_ms > prev_time && curr_rx >= prev_rx && curr_tx >= prev_tx {
-                    let delta_sec = (now_ms - prev_time) as f64 / 1000.0;
-                    if delta_sec > 0.05 && delta_sec < 10.0 {
-                        down_speed = (curr_rx - prev_rx) as f64 / delta_sec;
-                        up_speed = (curr_tx - prev_tx) as f64 / delta_sec;
-                    }
-                }
-            }
-        }
-    }
-
-    let _ = std::fs::write(stat_file, format!("{} {} {}", now_ms, curr_rx, curr_tx));
-
-    (format_speed(down_speed), format_speed(up_speed))
 }
 
 pub fn handle_cli(args: &[String]) -> Option<glib::ExitCode> {

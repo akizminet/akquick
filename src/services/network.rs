@@ -96,6 +96,17 @@ pub struct NetworkStatus {
     pub vpn_name: String,
 }
 
+impl From<&NetworkState> for NetworkStatus {
+    fn from(s: &NetworkState) -> Self {
+        Self {
+            wifi_enabled: s.wifi_enabled,
+            wifi_ssid: s.wifi_ssid.clone(),
+            vpn_active: s.vpn_active,
+            vpn_name: s.vpn_name.clone(),
+        }
+    }
+}
+
 pub struct NetworkService;
 
 impl NetworkService {
