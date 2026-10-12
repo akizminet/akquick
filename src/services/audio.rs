@@ -1,4 +1,11 @@
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+static TARGET_SINK_VOL: AtomicU32 = AtomicU32::new(u32::MAX);
+static SINK_WORKER_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+static TARGET_SOURCE_VOL: AtomicU32 = AtomicU32::new(u32::MAX);
+static SOURCE_WORKER_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AudioState {
@@ -162,48 +169,124 @@ impl AudioService {
     }
 
     pub fn set_volume(percent: u32) {
-        let vol_arg = format!("{}%", percent.min(150));
-        let res = Command::new("wpctl")
-            .args(["set-volume", "@DEFAULT_AUDIO_SINK@", &vol_arg])
-            .status();
-        if res.is_err() || !res.unwrap().success() {
-            let _ = Command::new("pactl")
-                .args(["set-sink-volume", "@DEFAULT_SINK@", &vol_arg])
-                .spawn();
+        let pct = percent.min(150);
+        TARGET_SINK_VOL.store(pct, Ordering::Release);
+        if !SINK_WORKER_ACTIVE.swap(true, Ordering::AcqRel) {
+            std::thread::spawn(|| {
+                let mut current_applied = u32::MAX;
+                loop {
+                    let target = TARGET_SINK_VOL.load(Ordering::Acquire);
+                    if target != current_applied && target != u32::MAX {
+                        current_applied = target;
+                        let vol_arg = format!("{}%", target);
+                        let res = Command::new("wpctl")
+                            .args(["set-volume", "-l", "1.5", "@DEFAULT_AUDIO_SINK@", &vol_arg])
+                            .status();
+                        if res.is_err() || !res.unwrap().success() {
+                            let _ = Command::new("pactl")
+                                .args(["set-sink-volume", "@DEFAULT_SINK@", &vol_arg])
+                                .status();
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                    if TARGET_SINK_VOL.load(Ordering::Acquire) == current_applied {
+                        SINK_WORKER_ACTIVE.store(false, Ordering::Release);
+                        if TARGET_SINK_VOL.load(Ordering::Acquire) != current_applied {
+                            if !SINK_WORKER_ACTIVE.swap(true, Ordering::AcqRel) {
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                }
+            });
         }
+    }
+
+    pub fn unmute_volume() {
+        std::thread::spawn(|| {
+            let res = Command::new("wpctl")
+                .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
+                .status();
+            if res.is_err() || !res.unwrap().success() {
+                let _ = Command::new("pactl")
+                    .args(["set-sink-mute", "@DEFAULT_SINK@", "0"])
+                    .status();
+            }
+        });
     }
 
     pub fn toggle_volume_mute() {
-        let res = Command::new("wpctl")
-            .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
-            .status();
-        if res.is_err() || !res.unwrap().success() {
-            let _ = Command::new("pactl")
-                .args(["set-sink-mute", "@DEFAULT_SINK@", "toggle"])
-                .spawn();
-        }
+        std::thread::spawn(|| {
+            let res = Command::new("wpctl")
+                .args(["set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"])
+                .status();
+            if res.is_err() || !res.unwrap().success() {
+                let _ = Command::new("pactl")
+                    .args(["set-sink-mute", "@DEFAULT_SINK@", "toggle"])
+                    .status();
+            }
+        });
     }
 
     pub fn set_mic_volume(percent: u32) {
-        let vol_arg = format!("{}%", percent.min(100));
-        let res = Command::new("wpctl")
-            .args(["set-volume", "@DEFAULT_AUDIO_SOURCE@", &vol_arg])
-            .status();
-        if res.is_err() || !res.unwrap().success() {
-            let _ = Command::new("pactl")
-                .args(["set-source-volume", "@DEFAULT_SOURCE@", &vol_arg])
-                .spawn();
+        let pct = percent.min(100);
+        TARGET_SOURCE_VOL.store(pct, Ordering::Release);
+        if !SOURCE_WORKER_ACTIVE.swap(true, Ordering::AcqRel) {
+            std::thread::spawn(|| {
+                let mut current_applied = u32::MAX;
+                loop {
+                    let target = TARGET_SOURCE_VOL.load(Ordering::Acquire);
+                    if target != current_applied && target != u32::MAX {
+                        current_applied = target;
+                        let vol_arg = format!("{}%", target);
+                        let res = Command::new("wpctl")
+                            .args(["set-volume", "@DEFAULT_AUDIO_SOURCE@", &vol_arg])
+                            .status();
+                        if res.is_err() || !res.unwrap().success() {
+                            let _ = Command::new("pactl")
+                                .args(["set-source-volume", "@DEFAULT_SOURCE@", &vol_arg])
+                                .status();
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                    if TARGET_SOURCE_VOL.load(Ordering::Acquire) == current_applied {
+                        SOURCE_WORKER_ACTIVE.store(false, Ordering::Release);
+                        if TARGET_SOURCE_VOL.load(Ordering::Acquire) != current_applied {
+                            if !SOURCE_WORKER_ACTIVE.swap(true, Ordering::AcqRel) {
+                                continue;
+                            }
+                        }
+                        break;
+                    }
+                }
+            });
         }
     }
 
+    pub fn unmute_mic() {
+        std::thread::spawn(|| {
+            let res = Command::new("wpctl")
+                .args(["set-mute", "@DEFAULT_AUDIO_SOURCE@", "0"])
+                .status();
+            if res.is_err() || !res.unwrap().success() {
+                let _ = Command::new("pactl")
+                    .args(["set-source-mute", "@DEFAULT_SOURCE@", "0"])
+                    .status();
+            }
+        });
+    }
+
     pub fn toggle_mic_mute() {
-        let res = Command::new("wpctl")
-            .args(["set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"])
-            .status();
-        if res.is_err() || !res.unwrap().success() {
-            let _ = Command::new("pactl")
-                .args(["set-source-mute", "@DEFAULT_SOURCE@", "toggle"])
-                .spawn();
-        }
+        std::thread::spawn(|| {
+            let res = Command::new("wpctl")
+                .args(["set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"])
+                .status();
+            if res.is_err() || !res.unwrap().success() {
+                let _ = Command::new("pactl")
+                    .args(["set-source-mute", "@DEFAULT_SOURCE@", "toggle"])
+                    .status();
+            }
+        });
     }
 }

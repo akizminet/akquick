@@ -15,10 +15,22 @@ pub struct SlidersSection {
     mic_mute_btn: gtk4::Button,
     is_mic_muted: std::rc::Rc<std::cell::Cell<bool>>,
     has_input_device: std::rc::Rc<std::cell::Cell<bool>>,
+    is_updating: std::rc::Rc<std::cell::Cell<bool>>,
+    is_out_dragging: std::rc::Rc<std::cell::Cell<bool>>,
+    is_mic_dragging: std::rc::Rc<std::cell::Cell<bool>>,
+    last_out_touch: std::rc::Rc<std::cell::Cell<std::time::Instant>>,
+    last_mic_touch: std::rc::Rc<std::cell::Cell<std::time::Instant>>,
 }
 
 impl SlidersSection {
     pub fn new(state: &SystemState) -> Self {
+        let is_updating = std::rc::Rc::new(std::cell::Cell::new(false));
+        let is_out_dragging = std::rc::Rc::new(std::cell::Cell::new(false));
+        let is_mic_dragging = std::rc::Rc::new(std::cell::Cell::new(false));
+        let past = std::time::Instant::now() - std::time::Duration::from_secs(10);
+        let last_out_touch = std::rc::Rc::new(std::cell::Cell::new(past));
+        let last_mic_touch = std::rc::Rc::new(std::cell::Cell::new(past));
+
         let tray = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Vertical)
             .spacing(12)
@@ -168,7 +180,13 @@ impl SlidersSection {
         let output_mute_btn_scale_clone = output_mute_btn.clone();
         let output_scale_slider_clone = output_scale.clone();
         let output_icon_slider_clone = output_icon.clone();
+        let is_updating_out = is_updating.clone();
+        let last_out_touch_val = last_out_touch.clone();
         output_scale.connect_value_changed(move |s| {
+            last_out_touch_val.set(std::time::Instant::now());
+            if is_updating_out.get() {
+                return;
+            }
             let val = s.value();
             let pct = val.round() as u32;
             pct_clone.set_label(&format!("{}%", pct));
@@ -181,11 +199,85 @@ impl SlidersSection {
                 output_mute_btn_scale_clone.set_icon_name("audio-volume-high-symbolic");
                 output_mute_btn_scale_clone.set_tooltip_text(Some("Mute Output"));
                 output_icon_slider_clone.set_icon_name(Some("audio-volume-high-symbolic"));
+                AudioService::unmute_volume();
             }
         });
 
         output_overlay.set_child(Some(&output_scale));
         output_overlay.add_overlay(&output_overlay_content);
+
+        // Mouse drag direct control on output capsule
+        let out_drag = gtk4::GestureDrag::new();
+        out_drag.set_propagation_phase(gtk4::PropagationPhase::Capture);
+        let scale_drag = output_scale.clone();
+        let is_out_dragging_begin = is_out_dragging.clone();
+        let is_out_dragging_end = is_out_dragging.clone();
+        let start_x = std::rc::Rc::new(std::cell::Cell::new(0.0));
+        let start_x_begin = start_x.clone();
+        let start_x_update = start_x.clone();
+        let start_x_end = start_x.clone();
+        let last_out_touch_begin = last_out_touch.clone();
+        let last_out_touch_update = last_out_touch.clone();
+        let last_out_touch_end = last_out_touch.clone();
+
+        out_drag.connect_drag_begin(move |gesture, x, _y| {
+            last_out_touch_begin.set(std::time::Instant::now());
+            is_out_dragging_begin.set(true);
+            start_x_begin.set(x);
+            if let Some(widget) = gesture.widget() {
+                let width = widget.width() as f64;
+                if width > 0.0 {
+                    let pct = (x / width * 100.0).clamp(0.0, 100.0);
+                    scale_drag.set_value(pct);
+                }
+            }
+        });
+
+        let scale_drag_update = output_scale.clone();
+        out_drag.connect_drag_update(move |gesture, offset_x, _offset_y| {
+            last_out_touch_update.set(std::time::Instant::now());
+            if let Some(widget) = gesture.widget() {
+                let width = widget.width() as f64;
+                if width > 0.0 {
+                    let current_x = start_x_update.get() + offset_x;
+                    let pct = (current_x / width * 100.0).clamp(0.0, 100.0);
+                    scale_drag_update.set_value(pct);
+                }
+            }
+        });
+
+        let scale_drag_end = output_scale.clone();
+        out_drag.connect_drag_end(move |gesture, offset_x, _offset_y| {
+            last_out_touch_end.set(std::time::Instant::now());
+            if let Some(widget) = gesture.widget() {
+                let width = widget.width() as f64;
+                if width > 0.0 {
+                    let current_x = start_x_end.get() + offset_x;
+                    let pct = (current_x / width * 100.0).clamp(0.0, 100.0);
+                    scale_drag_end.set_value(pct);
+                }
+            }
+            is_out_dragging_end.set(false);
+        });
+
+        output_overlay.add_controller(out_drag);
+
+        // Mouse wheel scroll to adjust volume (4% per notch, smooth tracking)
+        let out_scroll = gtk4::EventControllerScroll::new(
+            gtk4::EventControllerScrollFlags::VERTICAL,
+        );
+        out_scroll.set_propagation_phase(gtk4::PropagationPhase::Capture);
+        let scale_scroll = output_scale.clone();
+        let last_out_touch_scroll = last_out_touch.clone();
+        out_scroll.connect_scroll(move |_, _dx, dy| {
+            last_out_touch_scroll.set(std::time::Instant::now());
+            let curr = scale_scroll.value();
+            let step = if dy != 0.0 { dy * 4.0 } else { 0.0 };
+            let next = (curr - step).clamp(0.0, 100.0);
+            scale_scroll.set_value(next);
+            gtk4::glib::Propagation::Stop
+        });
+        output_overlay.add_controller(out_scroll);
 
         let is_out_muted_clone = is_out_muted.clone();
         let output_mute_btn_clone = output_mute_btn.clone();
@@ -366,7 +458,13 @@ impl SlidersSection {
         let mic_scale_slider_clone = mic_scale.clone();
         let mic_icon_slider_clone = mic_icon.clone();
         let is_mic_muted_scale = is_mic_muted.clone();
+        let is_updating_mic = is_updating.clone();
+        let last_mic_touch_val = last_mic_touch.clone();
         mic_scale.connect_value_changed(move |s| {
+            last_mic_touch_val.set(std::time::Instant::now());
+            if is_updating_mic.get() {
+                return;
+            }
             let val = s.value();
             let pct = val.round() as u32;
             mic_pct_clone.set_label(&format!("{}%", pct));
@@ -376,11 +474,85 @@ impl SlidersSection {
                 mic_scale_slider_clone.remove_css_class("is-muted");
                 mic_pct_clone.remove_css_class("is-muted");
                 mic_icon_slider_clone.set_icon_name(Some("audio-input-microphone-symbolic"));
+                AudioService::unmute_mic();
             }
         });
 
         mic_overlay.set_child(Some(&mic_scale));
         mic_overlay.add_overlay(&mic_overlay_content);
+
+        // Mouse drag direct control on mic capsule
+        let mic_drag = gtk4::GestureDrag::new();
+        mic_drag.set_propagation_phase(gtk4::PropagationPhase::Capture);
+        let mic_scale_drag = mic_scale.clone();
+        let is_mic_dragging_begin = is_mic_dragging.clone();
+        let is_mic_dragging_end = is_mic_dragging.clone();
+        let mic_start_x = std::rc::Rc::new(std::cell::Cell::new(0.0));
+        let mic_start_x_begin = mic_start_x.clone();
+        let mic_start_x_update = mic_start_x.clone();
+        let mic_start_x_end = mic_start_x.clone();
+        let last_mic_touch_begin = last_mic_touch.clone();
+        let last_mic_touch_update = last_mic_touch.clone();
+        let last_mic_touch_end = last_mic_touch.clone();
+
+        mic_drag.connect_drag_begin(move |gesture, x, _y| {
+            last_mic_touch_begin.set(std::time::Instant::now());
+            is_mic_dragging_begin.set(true);
+            mic_start_x_begin.set(x);
+            if let Some(widget) = gesture.widget() {
+                let width = widget.width() as f64;
+                if width > 0.0 {
+                    let pct = (x / width * 100.0).clamp(0.0, 100.0);
+                    mic_scale_drag.set_value(pct);
+                }
+            }
+        });
+
+        let mic_scale_drag_update = mic_scale.clone();
+        mic_drag.connect_drag_update(move |gesture, offset_x, _offset_y| {
+            last_mic_touch_update.set(std::time::Instant::now());
+            if let Some(widget) = gesture.widget() {
+                let width = widget.width() as f64;
+                if width > 0.0 {
+                    let current_x = mic_start_x_update.get() + offset_x;
+                    let pct = (current_x / width * 100.0).clamp(0.0, 100.0);
+                    mic_scale_drag_update.set_value(pct);
+                }
+            }
+        });
+
+        let mic_scale_drag_end = mic_scale.clone();
+        mic_drag.connect_drag_end(move |gesture, offset_x, _offset_y| {
+            last_mic_touch_end.set(std::time::Instant::now());
+            if let Some(widget) = gesture.widget() {
+                let width = widget.width() as f64;
+                if width > 0.0 {
+                    let current_x = mic_start_x_end.get() + offset_x;
+                    let pct = (current_x / width * 100.0).clamp(0.0, 100.0);
+                    mic_scale_drag_end.set_value(pct);
+                }
+            }
+            is_mic_dragging_end.set(false);
+        });
+
+        mic_overlay.add_controller(mic_drag);
+
+        // Mouse wheel scroll to adjust mic volume (4% per notch, smooth tracking)
+        let mic_scroll = gtk4::EventControllerScroll::new(
+            gtk4::EventControllerScrollFlags::VERTICAL,
+        );
+        mic_scroll.set_propagation_phase(gtk4::PropagationPhase::Capture);
+        let mic_scale_scroll = mic_scale.clone();
+        let last_mic_touch_scroll = last_mic_touch.clone();
+        mic_scroll.connect_scroll(move |_, _dx, dy| {
+            last_mic_touch_scroll.set(std::time::Instant::now());
+            let curr = mic_scale_scroll.value();
+            let step = if dy != 0.0 { dy * 4.0 } else { 0.0 };
+            let next = (curr - step).clamp(0.0, 100.0);
+            mic_scale_scroll.set_value(next);
+            gtk4::glib::Propagation::Stop
+        });
+        mic_overlay.add_controller(mic_scroll);
 
         // Separate Circular Quick Mute Button (HTML line 204)
         let mute_btn = gtk4::Button::builder()
@@ -507,6 +679,63 @@ impl SlidersSection {
             display_overlay.set_child(Some(&display_scale));
             display_overlay.add_overlay(&display_overlay_content);
 
+            // Mouse drag direct control on brightness capsule
+            let disp_drag = gtk4::GestureDrag::new();
+            disp_drag.set_propagation_phase(gtk4::PropagationPhase::Capture);
+            let disp_scale_drag = display_scale.clone();
+            let disp_start_x = std::rc::Rc::new(std::cell::Cell::new(0.0));
+            let disp_start_x_begin = disp_start_x.clone();
+            let disp_start_x_update = disp_start_x.clone();
+            let disp_start_x_end = disp_start_x.clone();
+
+            disp_drag.connect_drag_begin(move |gesture, x, _y| {
+                disp_start_x_begin.set(x);
+                if let Some(widget) = gesture.widget() {
+                    let width = widget.width() as f64;
+                    if width > 0.0 {
+                        let pct = (x / width * 100.0).clamp(0.0, 100.0);
+                        disp_scale_drag.set_value(pct);
+                    }
+                }
+            });
+
+            let disp_scale_drag_update = display_scale.clone();
+            disp_drag.connect_drag_update(move |gesture, offset_x, _offset_y| {
+                if let Some(widget) = gesture.widget() {
+                    let width = widget.width() as f64;
+                    if width > 0.0 {
+                        let current_x = disp_start_x_update.get() + offset_x;
+                        let pct = (current_x / width * 100.0).clamp(0.0, 100.0);
+                        disp_scale_drag_update.set_value(pct);
+                    }
+                }
+            });
+
+            let disp_scale_drag_end = display_scale.clone();
+            disp_drag.connect_drag_end(move |gesture, offset_x, _offset_y| {
+                if let Some(widget) = gesture.widget() {
+                    let width = widget.width() as f64;
+                    if width > 0.0 {
+                        let current_x = disp_start_x_end.get() + offset_x;
+                        let pct = (current_x / width * 100.0).clamp(0.0, 100.0);
+                        disp_scale_drag_end.set_value(pct);
+                    }
+                }
+            });
+
+            display_overlay.add_controller(disp_drag);
+
+            let disp_scroll = gtk4::EventControllerScroll::new(gtk4::EventControllerScrollFlags::VERTICAL);
+            disp_scroll.set_propagation_phase(gtk4::PropagationPhase::Capture);
+            let disp_scale_scroll = display_scale.clone();
+            disp_scroll.connect_scroll(move |_, _dx, dy| {
+                let curr = disp_scale_scroll.value();
+                let next = (curr - dy * 2.0).clamp(0.0, 100.0);
+                disp_scale_scroll.set_value(next);
+                gtk4::glib::Propagation::Stop
+            });
+            display_overlay.add_controller(disp_scroll);
+
             display_box.append(&display_overlay);
         }
 
@@ -528,12 +757,25 @@ impl SlidersSection {
             mic_mute_btn: mute_btn,
             is_mic_muted,
             has_input_device,
+            is_updating,
+            is_out_dragging,
+            is_mic_dragging,
+            last_out_touch,
+            last_mic_touch,
         }
     }
 
     pub fn update_audio(&self, audio: &AudioState) {
+        let now = std::time::Instant::now();
+        let out_recently_touched = now.duration_since(self.last_out_touch.get()).as_millis() < 800;
+        let mic_recently_touched = now.duration_since(self.last_mic_touch.get()).as_millis() < 800;
+
         self.is_out_muted.set(audio.volume_muted);
-        self.output_scale.set_value(audio.volume_percent as f64);
+        if !self.is_out_dragging.get() && !out_recently_touched {
+            self.is_updating.set(true);
+            self.output_scale.set_value(audio.volume_percent as f64);
+            self.is_updating.set(false);
+        }
         if audio.volume_muted {
             self.output_scale.add_css_class("is-muted");
             self.output_mute_btn.add_css_class("is-muted");
@@ -574,7 +816,11 @@ impl SlidersSection {
             self.mic_mute_btn.set_icon_name("microphone-disabled-symbolic");
             self.mic_mute_btn.set_tooltip_text(Some("No Microphone"));
         } else {
-            self.mic_scale.set_value(audio.mic_percent as f64);
+            if !self.is_mic_dragging.get() && !mic_recently_touched {
+                self.is_updating.set(true);
+                self.mic_scale.set_value(audio.mic_percent as f64);
+                self.is_updating.set(false);
+            }
             self.mic_desc.set_label(&audio.source_desc);
             if audio.mic_muted {
                 self.mic_scale.add_css_class("is-muted");
