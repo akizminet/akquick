@@ -53,31 +53,39 @@ impl TelemetryService {
         state
     }
 
+    pub fn fetch_cpu() -> u32 {
+        Self::calculate_cpu_usage()
+    }
+
     fn calculate_cpu_usage() -> u32 {
-        static PREV_CPU: std::sync::Mutex<Option<(u64, u64)>> = std::sync::Mutex::new(None);
+        static PREV_CPU: std::sync::Mutex<Option<(u64, u64, u32)>> = std::sync::Mutex::new(None);
 
         if let Some((curr_idle, curr_total)) = Self::read_cpu_times() {
             let mut prev = PREV_CPU.lock().unwrap();
-            if let Some((prev_idle, prev_total)) = *prev {
+            if let Some((prev_idle, prev_total, last_pct)) = *prev {
                 let total_delta = curr_total.saturating_sub(prev_total);
                 let idle_delta = curr_idle.saturating_sub(prev_idle);
-                *prev = Some((curr_idle, curr_total));
                 if total_delta > 0 {
                     let busy_delta = total_delta.saturating_sub(idle_delta);
-                    return ((busy_delta as f64 / total_delta as f64) * 100.0).round() as u32;
+                    let pct = ((busy_delta as f64 / total_delta as f64) * 100.0).clamp(0.0, 100.0).round() as u32;
+                    *prev = Some((curr_idle, curr_total, pct));
+                    return pct;
+                } else {
+                    return last_pct;
                 }
             } else {
-                *prev = Some((curr_idle, curr_total));
+                let mut initial_pct = 6;
                 // Instantaneous fallback from loadavg
                 if let Ok(load) = fs::read_to_string("/proc/loadavg") {
                     if let Some(first) = load.split_whitespace().next() {
                         if let Ok(val) = first.parse::<f64>() {
                             let ncpu = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(8) as f64;
-                            return ((val / ncpu) * 100.0).clamp(1.0, 100.0).round() as u32;
+                            initial_pct = ((val / ncpu) * 100.0).clamp(1.0, 100.0).round() as u32;
                         }
                     }
                 }
-                return 6;
+                *prev = Some((curr_idle, curr_total, initial_pct));
+                return initial_pct;
             }
         }
         0

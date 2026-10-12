@@ -14,6 +14,8 @@ pub enum AppUpdate {
         mpris: crate::services::MprisState,
         network: crate::services::NetworkStatus,
         audio: crate::services::AudioState,
+        battery: crate::services::BatteryState,
+        cpu_percent: u32,
     },
     FullWifi(crate::services::NetworkState),
 }
@@ -29,6 +31,8 @@ pub struct QuickSettingsWindow {
     pub sliders: std::rc::Rc<sliders::SlidersSection>,
     #[allow(dead_code)]
     pub wifi_page: std::rc::Rc<pages::WifiPage>,
+    #[allow(dead_code)]
+    pub footer: std::rc::Rc<footer::FooterBar>,
     pub poll_tx: std::sync::mpsc::Sender<AppUpdate>,
 }
 
@@ -107,7 +111,7 @@ impl QuickSettingsWindow {
         let mpris = std::rc::Rc::new(mpris::MprisCard::new(&state));
         main_card.append(&mpris.widget);
 
-        let footer = footer::FooterBar::new(&state);
+        let footer = std::rc::Rc::new(footer::FooterBar::new(&state));
         main_card.append(&footer.widget);
 
         // 2. Wi-Fi Sub-Page
@@ -254,11 +258,12 @@ impl QuickSettingsWindow {
             glib::ControlFlow::Continue
         });
 
-        // Live Reactive Polling Ticker (every 500ms) for MPRIS + Network & VPN + Audio
+        // Live Reactive Polling Ticker (every 500ms) for MPRIS + Network & VPN + Audio + Battery & CPU
         let mpris_card = mpris.clone();
         let toggles_card = toggles.clone();
         let sliders_card = sliders.clone();
         let wifi_card = wifi_page.clone();
+        let footer_card = footer.clone();
         let tx_fetch = poll_tx.clone();
         let stack_poll = stack.clone();
         let mut last_ssid = state.network.wifi_ssid.clone();
@@ -267,11 +272,12 @@ impl QuickSettingsWindow {
         glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
             while let Ok(data) = rx.try_recv() {
                 match data {
-                    AppUpdate::Status { mpris, network, audio } => {
+                    AppUpdate::Status { mpris, network, audio, battery, cpu_percent } => {
                         mpris_card.update(&mpris);
                         toggles_card.update_network(&network);
                         toggles_card.update_audio(&audio);
                         sliders_card.update_audio(&audio);
+                        footer_card.update(&battery, cpu_percent);
 
                         // If Wi-Fi SSID changed (e.g. disconnected or switched AP), auto-refresh wifi page
                         if network.wifi_ssid != last_ssid {
@@ -295,12 +301,14 @@ impl QuickSettingsWindow {
             let should_refresh_wifi = is_wifi_open && (ticker_count % 8 == 0);
 
             crate::services::mpris::MPRIS_RT.spawn(async move {
-                let (mpris, network, audio) = tokio::join!(
+                let (mpris, network, audio, battery) = tokio::join!(
                     crate::services::MprisService::fetch(),
                     crate::services::NetworkService::fetch_status(),
                     async { crate::services::AudioService::fetch() },
+                    crate::services::BatteryService::fetch(),
                 );
-                let _ = tx.send(AppUpdate::Status { mpris, network, audio });
+                let cpu_percent = crate::services::TelemetryService::fetch_cpu();
+                let _ = tx.send(AppUpdate::Status { mpris, network, audio, battery, cpu_percent });
 
                 if should_refresh_wifi {
                     let net = crate::services::NetworkService::fetch_with_cached_aps().await;
@@ -318,6 +326,7 @@ impl QuickSettingsWindow {
             toggles,
             sliders,
             wifi_page,
+            footer,
             poll_tx,
         }
     }
@@ -325,12 +334,14 @@ impl QuickSettingsWindow {
     pub fn refresh(&self) {
         let tx = self.poll_tx.clone();
         crate::services::mpris::MPRIS_RT.spawn(async move {
-            let (mpris, network, audio) = tokio::join!(
+            let (mpris, network, audio, battery) = tokio::join!(
                 crate::services::MprisService::fetch(),
                 crate::services::NetworkService::fetch_status(),
                 async { crate::services::AudioService::fetch() },
+                crate::services::BatteryService::fetch(),
             );
-            let _ = tx.send(AppUpdate::Status { mpris, network, audio });
+            let cpu_percent = crate::services::TelemetryService::fetch_cpu();
+            let _ = tx.send(AppUpdate::Status { mpris, network, audio, battery, cpu_percent });
         });
     }
 

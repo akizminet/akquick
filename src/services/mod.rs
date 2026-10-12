@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod audio;
+pub mod battery;
 pub mod bluetooth;
 pub mod display;
 pub mod mpris;
@@ -8,6 +9,7 @@ pub mod telemetry;
 
 pub use actions::ActionService;
 pub use audio::{AudioService, AudioState};
+pub use battery::{BatteryService, BatteryState};
 pub use bluetooth::{BluetoothService, BluetoothState};
 pub use display::{DisplayService, MonitorDisplay};
 pub use mpris::{MprisService, MprisState};
@@ -23,6 +25,7 @@ pub struct SystemState {
     pub bluetooth: BluetoothState,
     pub mpris: MprisState,
     pub telemetry: TelemetryState,
+    pub battery: BatteryState,
     pub displays: Vec<MonitorDisplay>,
     pub dnd_active: bool,
     pub night_light_active: bool,
@@ -61,6 +64,10 @@ impl SystemState {
             let displays = DisplayService::fetch();
             let t_disp = t5.elapsed();
 
+            let t6 = std::time::Instant::now();
+            let battery = BatteryService::fetch().await;
+            let t_bat = t6.elapsed();
+
             if std::env::var("AKQUICK_BENCH").is_ok() {
                 eprintln!("   -> Network:   {:>8.2?}", t_net);
                 eprintln!("   -> Bluetooth: {:>8.2?}", t_bt);
@@ -68,6 +75,7 @@ impl SystemState {
                 eprintln!("   -> Audio:     {:>8.2?}", t_audio);
                 eprintln!("   -> Telemetry: {:>8.2?}", t_telem);
                 eprintln!("   -> Displays:  {:>8.2?}", t_disp);
+                eprintln!("   -> Battery:   {:>8.2?}", t_bat);
             }
 
             let night_light_active = Command::new("pgrep")
@@ -83,6 +91,7 @@ impl SystemState {
                 bluetooth,
                 mpris,
                 telemetry,
+                battery,
                 displays,
                 dnd_active: false,
                 night_light_active,
