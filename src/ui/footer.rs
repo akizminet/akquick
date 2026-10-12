@@ -1,11 +1,10 @@
 use gtk4::prelude::*;
-use crate::services::{BatteryState, SystemState};
+use crate::services::SystemState;
 
 pub struct FooterBar {
     pub widget: gtk4::Box,
-    bat_icon: gtk4::Image,
-    bat_val: gtk4::Label,
-    bat_rem: gtk4::Label,
+    cpu_val: gtk4::Label,
+    ram_val: gtk4::Label,
 }
 
 impl FooterBar {
@@ -16,7 +15,7 @@ impl FooterBar {
             .css_classes(["footer-bar"])
             .build();
 
-        // Left: Battery / Power Status
+        // Left: CPU & RAM Hardware Monitor
         let left_box = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Horizontal)
             .spacing(6)
@@ -25,23 +24,29 @@ impl FooterBar {
             .valign(gtk4::Align::Center)
             .build();
 
-        let bat_icon = gtk4::Image::builder()
-            .icon_name(state.battery.icon_name())
-            .pixel_size(18)
-            .css_classes(["footer-bat-icon"])
+        let hw_icon = gtk4::Image::builder()
+            .icon_name("applications-system-symbolic")
+            .pixel_size(16)
+            .css_classes(["footer-hw-icon"])
             .build();
 
-        let bat_val = gtk4::Label::builder()
-            .css_classes(["footer-bat-pct"])
+        let cpu_val = gtk4::Label::builder()
+            .css_classes(["footer-hw-text"])
             .build();
 
-        let bat_rem = gtk4::Label::builder()
-            .css_classes(["footer-bat-rem"])
+        let dot_sep = gtk4::Label::builder()
+            .label("•")
+            .css_classes(["footer-hw-sep"])
             .build();
 
-        left_box.append(&bat_icon);
-        left_box.append(&bat_val);
-        left_box.append(&bat_rem);
+        let ram_val = gtk4::Label::builder()
+            .css_classes(["footer-hw-text"])
+            .build();
+
+        left_box.append(&hw_icon);
+        left_box.append(&cpu_val);
+        left_box.append(&dot_sep);
+        left_box.append(&ram_val);
 
         // Right: Profile: Balanced Chip
         let profile_chip = gtk4::Box::builder()
@@ -69,35 +74,23 @@ impl FooterBar {
 
         let footer_bar = Self {
             widget: footer,
-            bat_icon,
-            bat_val,
-            bat_rem,
+            cpu_val,
+            ram_val,
         };
 
-        footer_bar.update(&state.battery, state.telemetry.cpu_percent);
+        footer_bar.update(state.telemetry.cpu_percent, state.telemetry.ram_used_gib, state.telemetry.ram_total_gib);
 
         footer_bar
     }
 
-    pub fn update(&self, battery: &BatteryState, cpu_percent: u32) {
-        self.bat_icon.set_icon_name(Some(battery.icon_name()));
+    pub fn update(&self, cpu_percent: u32, ram_used_gib: f32, ram_total_gib: f32) {
+        self.cpu_val.set_label(&format!("CPU: {}%", cpu_percent));
 
-        if battery.is_present {
-            self.bat_val.set_visible(true);
-            self.bat_val.set_label(&format!("{}%", battery.percentage));
-
-            let rem = if !battery.time_remaining.is_empty() {
-                format!("({} • {}% CPU)", battery.time_remaining, cpu_percent)
-            } else if battery.is_charging {
-                format!("(Charging • {}% CPU)", cpu_percent)
-            } else {
-                format!("({}% CPU)", cpu_percent)
-            };
-            self.bat_rem.set_label(&rem);
+        if ram_total_gib > 0.0 {
+            let ram_pct = ((ram_used_gib / ram_total_gib) * 100.0).clamp(0.0, 100.0).round() as u32;
+            self.ram_val.set_label(&format!("RAM: {:.1}/{:.1} GB ({}%)", ram_used_gib, ram_total_gib, ram_pct));
         } else {
-            self.bat_val.set_visible(true);
-            self.bat_val.set_label("AC");
-            self.bat_rem.set_label(&format!("({}% CPU)", cpu_percent));
+            self.ram_val.set_label("RAM: --");
         }
     }
 }

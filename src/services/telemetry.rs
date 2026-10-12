@@ -57,6 +57,35 @@ impl TelemetryService {
         Self::calculate_cpu_usage()
     }
 
+    pub fn fetch_ram() -> (f32, f32) {
+        if let Ok(content) = fs::read_to_string("/proc/meminfo") {
+            let mut total_kb: f32 = 0.0;
+            let mut avail_kb: f32 = 0.0;
+
+            for line in content.lines() {
+                if line.starts_with("MemTotal:") {
+                    if let Some(num) = line.split_whitespace().nth(1) {
+                        total_kb = num.parse().unwrap_or(0.0);
+                    }
+                } else if line.starts_with("MemAvailable:") {
+                    if let Some(num) = line.split_whitespace().nth(1) {
+                        avail_kb = num.parse().unwrap_or(0.0);
+                    }
+                }
+            }
+
+            if total_kb > 0.0 {
+                let total_gib = total_kb / (1024.0 * 1024.0);
+                let used_gib = (total_kb - avail_kb) / (1024.0 * 1024.0);
+                return (
+                    (used_gib * 10.0).round() / 10.0,
+                    (total_gib * 10.0).round() / 10.0,
+                );
+            }
+        }
+        (0.0, 0.0)
+    }
+
     fn calculate_cpu_usage() -> u32 {
         static PREV_CPU: std::sync::Mutex<Option<(u64, u64, u32)>> = std::sync::Mutex::new(None);
 

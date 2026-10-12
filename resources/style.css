@@ -614,18 +614,23 @@ window.quicksettings-window {
     border-radius: 9999px;
 }
 
-.footer-bat-icon {
+.footer-hw-icon {
     color: @secondary;
 }
 
-.footer-bat-pct {
-    font-weight: 700;
+.footer-hw-text {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
     color: @on-surface;
 }
 
-.footer-bat-rem {
+.footer-hw-sep {
     font-size: 11px;
     color: @on-surface-variant;
+    opacity: 0.5;
+    margin-left: 2px;
+    margin-right: 2px;
 }
 
 .footer-profile-chip {

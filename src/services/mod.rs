@@ -24,6 +24,7 @@ pub struct SystemState {
     pub bluetooth: BluetoothState,
     pub mpris: MprisState,
     pub telemetry: TelemetryState,
+    #[allow(dead_code)]
     pub battery: BatteryState,
     pub displays: Vec<MonitorDisplay>,
     pub dnd_active: bool,

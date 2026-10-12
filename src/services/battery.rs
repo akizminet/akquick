@@ -54,6 +54,7 @@ impl Default for BatteryState {
 }
 
 impl BatteryState {
+    #[allow(dead_code)]
     pub fn icon_name(&self) -> &'static str {
         if !self.is_present {
             return "ac-adapter-symbolic";
@@ -104,6 +105,12 @@ impl BatteryService {
                         if path_str.contains("battery") {
                             if let Ok(builder) = UPowerDeviceProxy::builder(&conn).path(dev_path) {
                                 if let Ok(dev) = builder.build().await {
+                                    let dev_type = dev.type_().await.unwrap_or(0);
+                                    if dev_type != 2 {
+                                        // 2 = UP_DEVICE_KIND_BATTERY. Skip peripheral batteries (mouse, keyboard, etc.)
+                                        continue;
+                                    }
+
                                     let is_present = dev.is_present().await.unwrap_or(true);
                                     if !is_present {
                                         continue;
