@@ -5,11 +5,14 @@ pub struct SlidersSection {
     pub widget: gtk4::Box,
     output_scale: gtk4::Scale,
     output_icon: gtk4::Image,
+    output_desc: gtk4::Label,
+    output_chip_label: gtk4::Label,
     output_pct: gtk4::Label,
     output_mute_btn: gtk4::Button,
     is_out_muted: std::rc::Rc<std::cell::Cell<bool>>,
     mic_scale: gtk4::Scale,
     mic_icon: gtk4::Image,
+    mic_chip_label: gtk4::Label,
     mic_desc: gtk4::Label,
     mic_pct: gtk4::Label,
     mic_mute_btn: gtk4::Button,
@@ -68,7 +71,9 @@ impl SlidersSection {
             .build();
 
         let chip_label = gtk4::Label::builder()
-            .label(&state.audio.sink_name)
+            .label(&state.audio.sink_desc)
+            .ellipsize(gtk4::pango::EllipsizeMode::End)
+            .max_width_chars(18)
             .build();
 
         let chip_arrow = gtk4::Image::builder()
@@ -353,10 +358,12 @@ impl SlidersSection {
 
         let mic_chip_label = gtk4::Label::builder()
             .label(if state.audio.has_input_device {
-                &state.audio.source_name
+                &state.audio.source_desc
             } else {
                 "Disconnected"
             })
+            .ellipsize(gtk4::pango::EllipsizeMode::End)
+            .max_width_chars(18)
             .build();
 
         let mic_chip_icon = gtk4::Image::builder()
@@ -747,11 +754,14 @@ impl SlidersSection {
             widget: tray,
             output_scale,
             output_icon,
+            output_desc,
+            output_chip_label: chip_label,
             output_pct,
             output_mute_btn,
             is_out_muted,
             mic_scale,
             mic_icon,
+            mic_chip_label,
             mic_desc,
             mic_pct,
             mic_mute_btn: mute_btn,
@@ -769,6 +779,9 @@ impl SlidersSection {
         let now = std::time::Instant::now();
         let out_recently_touched = now.duration_since(self.last_out_touch.get()).as_millis() < 800;
         let mic_recently_touched = now.duration_since(self.last_mic_touch.get()).as_millis() < 800;
+
+        self.output_desc.set_label(&audio.sink_desc);
+        self.output_chip_label.set_label(&audio.sink_desc);
 
         self.is_out_muted.set(audio.volume_muted);
         if !self.is_out_dragging.get() && !out_recently_touched {
@@ -812,6 +825,7 @@ impl SlidersSection {
             self.mic_pct.add_css_class("is-muted");
             self.mic_pct.set_label("0%");
             self.mic_desc.set_label("No Microphone Detected");
+            self.mic_chip_label.set_label("Disconnected");
             self.mic_icon.set_icon_name(Some("microphone-disabled-symbolic"));
             self.mic_mute_btn.set_icon_name("microphone-disabled-symbolic");
             self.mic_mute_btn.set_tooltip_text(Some("No Microphone"));
@@ -822,6 +836,7 @@ impl SlidersSection {
                 self.is_updating.set(false);
             }
             self.mic_desc.set_label(&audio.source_desc);
+            self.mic_chip_label.set_label(&audio.source_desc);
             if audio.mic_muted {
                 self.mic_scale.add_css_class("is-muted");
                 self.mic_mute_btn.add_css_class("is-muted");

@@ -178,39 +178,75 @@ impl PulseAudioClient {
     }
 
     fn parse_device_info(rep: &[u8]) -> Result<(String, String, u32, bool), String> {
+        if rep.len() < 10 || rep[0] != b'L' {
+            return Err("Invalid tagstruct reply".to_string());
+        }
+
+        let mut offset = 10;
         let mut name = String::new();
         let mut desc = String::new();
         let mut volume = 0u32;
         let mut muted = false;
 
-        // Parse strings: first string is internal name, second string is human description
-        let mut strings = Vec::new();
-        let mut i = 0;
-        while i < rep.len() {
-            if rep[i] == b't' {
-                i += 1;
-                let start = i;
-                while i < rep.len() && rep[i] != 0 {
-                    i += 1;
-                }
-                if let Ok(s) = std::str::from_utf8(&rep[start..i]) {
-                    strings.push(s.to_string());
-                }
+        // Field 0: Index: Tag 'L' (5 bytes)
+        if offset < rep.len() && rep[offset] == b'L' {
+            offset += 5;
+        }
+
+        // Field 1: Name: Tag 't' (string) or 'N' (null)
+        if offset < rep.len() && rep[offset] == b't' {
+            offset += 1;
+            let start = offset;
+            while offset < rep.len() && rep[offset] != 0 {
+                offset += 1;
             }
-            i += 1;
+            if let Ok(s) = std::str::from_utf8(&rep[start..offset]) {
+                name = s.to_string();
+            }
+            if offset < rep.len() && rep[offset] == 0 {
+                offset += 1;
+            }
+        } else if offset < rep.len() && rep[offset] == b'N' {
+            offset += 1;
         }
 
-        if let Some(n) = strings.first() {
-            name = n.clone();
-        }
-        if let Some(d) = strings.get(1) {
-            desc = d.clone();
+        // Field 2: Description: Tag 't' (string) or 'N' (null)
+        if offset < rep.len() && rep[offset] == b't' {
+            offset += 1;
+            let start = offset;
+            while offset < rep.len() && rep[offset] != 0 {
+                offset += 1;
+            }
+            if let Ok(s) = std::str::from_utf8(&rep[start..offset]) {
+                desc = s.to_string();
+            }
+            if offset < rep.len() && rep[offset] == 0 {
+                offset += 1;
+            }
+        } else if offset < rep.len() && rep[offset] == b'N' {
+            offset += 1;
         }
 
-        // Parse volume: Tag 'v' (cvolume) -> channel count (u8) -> volumes (u32 each)
-        if let Some(pos) = rep.windows(2).position(|w| w[0] == b'v') {
-            let channels = rep[pos + 1] as usize;
-            let vol_start = pos + 2;
+        // Field 3: Sample spec: Tag 'a' (1 + 1 + 1 + 4 = 7 bytes)
+        if offset < rep.len() && rep[offset] == b'a' {
+            offset += 7;
+        }
+
+        // Field 4: Channel map: Tag 'm' (1 + 1 + channels bytes)
+        if offset + 1 < rep.len() && rep[offset] == b'm' {
+            let channels = rep[offset + 1] as usize;
+            offset += 2 + channels;
+        }
+
+        // Field 5: Module index: Tag 'L' (5 bytes)
+        if offset < rep.len() && rep[offset] == b'L' {
+            offset += 5;
+        }
+
+        // Field 6: Volume: Tag 'v' (1 + 1 + channels * 4 bytes)
+        if offset + 1 < rep.len() && rep[offset] == b'v' {
+            let channels = rep[offset + 1] as usize;
+            let vol_start = offset + 2;
             if vol_start + 4 <= rep.len() {
                 let v = u32::from_be_bytes([
                     rep[vol_start],
@@ -220,11 +256,44 @@ impl PulseAudioClient {
                 ]);
                 volume = ((v as f64 * 100.0) / 65536.0).round() as u32;
             }
+            offset += 2 + channels * 4;
+        }
 
-            // Mute tag is immediately after channel volumes: Tag '1' (true) or '0' (false)
-            let mute_pos = vol_start + channels * 4;
-            if mute_pos < rep.len() {
-                muted = rep[mute_pos] == b'1';
+        // Field 7: Muted: Tag '0' (false) or '1' (true)
+        if offset < rep.len() {
+            if rep[offset] == b'0' {
+                muted = false;
+                #[allow(unused_assignments)]
+                {
+                    offset += 1;
+                }
+            } else if rep[offset] == b'1' {
+                muted = true;
+                #[allow(unused_assignments)]
+                {
+                    offset += 1;
+                }
+            }
+        }
+
+        // Proplist check: if "device.description" exists in proplist, prefer it if cleaner
+        if let Some(pos) = rep.windows(19).position(|w| w == b"device.description\0") {
+            let val_start = pos + 19;
+            if val_start + 10 < rep.len() && rep[val_start] == b'L' && rep[val_start + 5] == b'x' {
+                let prop_len = u32::from_be_bytes([
+                    rep[val_start + 1],
+                    rep[val_start + 2],
+                    rep[val_start + 3],
+                    rep[val_start + 4],
+                ]) as usize;
+                let s_start = val_start + 10;
+                let s_end = (s_start + prop_len).min(rep.len());
+                if let Ok(pretty) = std::str::from_utf8(&rep[s_start..s_end]) {
+                    let clean = pretty.trim_matches('\0').trim();
+                    if !clean.is_empty() && clean != "PipeWire" {
+                        desc = clean.to_string();
+                    }
+                }
             }
         }
 

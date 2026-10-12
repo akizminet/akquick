@@ -123,20 +123,45 @@ pub struct AudioState {
 pub struct AudioService;
 
 impl AudioService {
+    pub fn format_friendly_name(raw_name: &str, raw_desc: &str, is_source: bool) -> String {
+        let mut desc = raw_desc.trim();
+        if desc.is_empty() || desc == "PipeWire" {
+            desc = raw_name.trim();
+        }
+
+        if is_source {
+            if desc.contains("Built-in Audio") || desc.contains("Built-in") || raw_name.contains("analog-stereo") {
+                return "Built-in Microphone".to_string();
+            }
+            if desc.ends_with(" Analog Stereo") {
+                desc = desc.trim_end_matches(" Analog Stereo");
+            }
+            desc.to_string()
+        } else {
+            if desc == "Built-in Audio Analog Stereo" {
+                return "Built-in Audio".to_string();
+            }
+            if desc.ends_with(" Analog Stereo") {
+                desc = desc.trim_end_matches(" Analog Stereo");
+            }
+            desc.to_string()
+        }
+    }
+
     pub fn fetch() -> AudioState {
         let mut state = AudioState::default();
 
         if let Ok(mut client) = PulseAudioClient::connect() {
             if let Ok((name, desc, vol, muted)) = client.get_sink_info() {
-                state.sink_name = if !name.is_empty() { name } else { "Default Output".to_string() };
-                state.sink_desc = if !desc.is_empty() { desc } else { "Audio Sink".to_string() };
+                state.sink_name = if !name.is_empty() { name.clone() } else { "Default Output".to_string() };
+                state.sink_desc = Self::format_friendly_name(&name, &desc, false);
                 state.volume_percent = vol;
                 state.volume_muted = muted;
             }
 
             if let Ok((name, desc, vol, muted)) = client.get_source_info() {
-                state.source_name = if !name.is_empty() { name } else { "Default Input".to_string() };
-                state.source_desc = if !desc.is_empty() { desc } else { "Microphone".to_string() };
+                state.source_name = if !name.is_empty() { name.clone() } else { "Default Input".to_string() };
+                state.source_desc = Self::format_friendly_name(&name, &desc, true);
                 state.mic_percent = vol;
                 state.mic_muted = muted;
                 state.has_input_device = true;
@@ -145,7 +170,7 @@ impl AudioService {
 
         if state.sink_name.is_empty() {
             state.sink_name = "Default Output".to_string();
-            state.sink_desc = "Audio Sink".to_string();
+            state.sink_desc = "Audio Output".to_string();
         }
 
         if !state.has_input_device {
