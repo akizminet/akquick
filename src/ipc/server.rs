@@ -56,7 +56,9 @@ impl IpcServer {
                                         let lock = LATEST_STATUS.read().ok();
                                         if let Some(Some(st)) = lock.as_deref() {
                                             format!(
-                                                r#"{{"wifi_icon":"{}","wifi_name":"{}","down_speed":"{}","up_speed":"{}","bt_icon":"{}","bt_enabled":{},"bt_connected":{},"audio_icon":"{}","audio_volume":{},"audio_muted":{},"mic_icon":"{}","mic_volume":{},"mic_muted":{}}}"#,
+                                                r#"{{"cpu_percent":{},"ram_used_gib":{:.1},"wifi_icon":"{}","wifi_name":"{}","down_speed":"{}","up_speed":"{}","bt_icon":"{}","bt_enabled":{},"bt_connected":{},"audio_icon":"{}","audio_volume":{},"audio_muted":{},"mic_icon":"{}","mic_volume":{},"mic_muted":{}}}"#,
+                                                st.cpu_percent,
+                                                st.ram_used_gib,
                                                 st.wifi_icon,
                                                 st.wifi_name,
                                                 st.down_speed,

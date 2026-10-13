@@ -2,6 +2,8 @@ use crate::services::{AudioService, BluetoothService, BluetoothState, NetworkSer
 use std::io::Write;
 
 pub struct FullStatus {
+    pub cpu_percent: u32,
+    pub ram_used_gib: f32,
     pub wifi_icon: &'static str,
     pub wifi_name: String,
     pub down_speed: String,
@@ -23,6 +25,8 @@ impl FullStatus {
         network: &NetworkStatus,
         audio: &crate::services::AudioState,
         bluetooth: &BluetoothState,
+        cpu_percent: u32,
+        ram_used_gib: f32,
     ) -> Self {
         let (wifi_icon, raw_wifi_name) = if network.primary_is_ethernet || network.ethernet_connected {
             ("󰈀", if network.ethernet_name.is_empty() { "Ethernet".to_string() } else { network.ethernet_name.clone() })
@@ -68,6 +72,8 @@ impl FullStatus {
         let (down_speed, up_speed) = crate::translators::sysfs::get_network_speed();
 
         Self {
+            cpu_percent,
+            ram_used_gib,
             wifi_icon,
             wifi_name,
             down_speed,
@@ -91,32 +97,59 @@ impl FullStatus {
             async { AudioService::fetch() },
             BluetoothService::fetch(),
         );
-        Self::from_components(&network, &audio, &bluetooth)
+        let cpu_percent = crate::services::TelemetryService::fetch_cpu();
+        let (ram_used_gib, _) = crate::services::TelemetryService::fetch_ram();
+        Self::from_components(&network, &audio, &bluetooth, cpu_percent, ram_used_gib)
     }
 
     pub fn format_full(&self) -> String {
-        let audio_str = if self.audio_muted {
-            format!("󰝟 {}%", self.audio_vol)
-        } else {
-            format!("{} {}%", self.audio_icon, self.audio_vol)
-        };
+        let sep = "<span foreground='#45475a'>│</span>";
+        let cpu_str = format!("<span foreground='#74c7ec'>󰍛</span> {}%", self.cpu_percent);
+        let ram_str = format!("<span foreground='#f5c2e7'>󰘚</span> {:.1}G", self.ram_used_gib);
 
-        let mic_str = if !self.has_mic {
-            "󰍭 0%".to_string()
-        } else if self.mic_muted {
-            format!("󰍭 {}%", self.mic_vol)
+        let escaped_wifi = self.wifi_name.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        let wifi_color = if self.wifi_icon == "󰤭" || self.wifi_icon == "󰤮" { "#6c7086" } else { "#89b4fa" };
+        let wifi_str = format!("<span foreground='{}'>{}</span> {}", wifi_color, self.wifi_icon, escaped_wifi);
+
+        let speed_str = format!("<span foreground='#a6e3a1'>⬇{}</span> <span foreground='#fab387'>⬆{}</span>", self.down_speed, self.up_speed);
+
+        let bt_color = if self.bt_connected { "#a6e3a1" } else if self.bt_enabled { "#b4befe" } else { "#6c7086" };
+        let bt_str = format!("<span foreground='{}'>{}</span>", bt_color, self.bt_icon);
+
+        let (audio_color, audio_icon) = if self.audio_muted {
+            ("#f38ba8", "󰝟")
         } else {
-            format!("{} {}%", self.mic_icon, self.mic_vol)
+            ("#94e2d5", self.audio_icon)
         };
+        let audio_str = format!("<span foreground='{}'>{}</span> {}%", audio_color, audio_icon, self.audio_vol);
+
+        let (mic_color, mic_icon, mic_vol) = if !self.has_mic {
+            ("#6c7086", "󰍭", 0)
+        } else if self.mic_muted {
+            ("#f38ba8", "󰍭", self.mic_vol)
+        } else {
+            ("#cba6f7", self.mic_icon, self.mic_vol)
+        };
+        let mic_str = format!("<span foreground='{}'>{}</span> {}%", mic_color, mic_icon, mic_vol);
 
         format!(
-            "{} {}  ⬇{} ⬆{}  {}  {}  {}",
-            self.wifi_icon, self.wifi_name, self.down_speed, self.up_speed, self.bt_icon, audio_str, mic_str
+            "{}  {}  {}  {}  {}  {}  {}  {}  {}  {}  {}  {}  {}",
+            cpu_str, sep, ram_str, sep, wifi_str, sep, speed_str, sep, bt_str, sep, audio_str, sep, mic_str
         )
     }
 
     pub fn format_icons_only(&self) -> String {
-        format!("{}  {}  {}  {}", self.wifi_icon, self.bt_icon, self.audio_icon, self.mic_icon)
+        let cpu = "<span foreground='#74c7ec'>󰍛</span>";
+        let ram = "<span foreground='#f5c2e7'>󰘚</span>";
+        let wifi_color = if self.wifi_icon == "󰤭" || self.wifi_icon == "󰤮" { "#6c7086" } else { "#89b4fa" };
+        let wifi = format!("<span foreground='{}'>{}</span>", wifi_color, self.wifi_icon);
+        let bt_color = if self.bt_connected { "#a6e3a1" } else if self.bt_enabled { "#b4befe" } else { "#6c7086" };
+        let bt = format!("<span foreground='{}'>{}</span>", bt_color, self.bt_icon);
+        let audio_color = if self.audio_muted { "#f38ba8" } else { "#94e2d5" };
+        let audio = format!("<span foreground='{}'>{}</span>", audio_color, self.audio_icon);
+        let mic_color = if !self.has_mic || self.mic_muted { "#f38ba8" } else { "#cba6f7" };
+        let mic = format!("<span foreground='{}'>{}</span>", mic_color, self.mic_icon);
+        format!("{}  {}  {}  {}  {}  {}", cpu, ram, wifi, bt, audio, mic)
     }
 }
 
@@ -164,7 +197,9 @@ pub fn handle_cli(args: &[String]) -> Option<glib::ExitCode> {
 
         if is_json {
             println!(
-                r#"{{"wifi_icon":"{}","wifi_name":"{}","down_speed":"{}","up_speed":"{}","bt_icon":"{}","bt_enabled":{},"bt_connected":{},"audio_icon":"{}","audio_volume":{},"audio_muted":{},"mic_icon":"{}","mic_volume":{},"mic_muted":{}}}"#,
+                r#"{{"cpu_percent":{},"ram_used_gib":{:.1},"wifi_icon":"{}","wifi_name":"{}","down_speed":"{}","up_speed":"{}","bt_icon":"{}","bt_enabled":{},"bt_connected":{},"audio_icon":"{}","audio_volume":{},"audio_muted":{},"mic_icon":"{}","mic_volume":{},"mic_muted":{}}}"#,
+                status.cpu_percent,
+                status.ram_used_gib,
                 status.wifi_icon,
                 status.wifi_name,
                 status.down_speed,

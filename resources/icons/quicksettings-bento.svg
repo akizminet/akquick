@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none">
+  <defs>
+    <linearGradient id="bh-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#89b4fa"/>
+      <stop offset="100%" stop-color="#74c7ec"/>
+    </linearGradient>
+    <linearGradient id="bh-mauve" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#cba6f7"/>
+      <stop offset="100%" stop-color="#b4befe"/>
+    </linearGradient>
+  </defs>
+  <!-- Background Plate -->
+  <rect width="24" height="24" rx="6" fill="#181825" fill-opacity="0.6"/>
+  <!-- Top Left: WiFi Pill -->
+  <rect x="2.5" y="2.5" width="8.5" height="8.5" rx="3" fill="url(#bh-blue)"/>
+  <path d="M5 7.6a3.5 3.5 0 0 1 3.5-2.3c1.4 0 2.6.8 3.2 2" stroke="#181825" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+  <path d="M6.2 8.7a1.8 1.8 0 0 1 2.3-.7 1.8 1.8 0 0 1 1.2.7" stroke="#181825" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+  <circle cx="6.75" cy="9.8" r="0.75" fill="#181825"/>
+  <!-- Top Right: Bluetooth Pill -->
+  <rect x="13" y="2.5" width="8.5" height="8.5" rx="3" fill="url(#bh-mauve)"/>
+  <path d="M16.5 4.5l2 1.8-2 1.8V4.5zm0 3.6l2 1.8-2 1.8V8.1zM15 5.5l3.5 3.5L15 12.5" stroke="#181825" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Bottom Left: Audio Tile -->
+  <rect x="2.5" y="13" width="8.5" height="8.5" rx="3" fill="#313244"/>
+  <path d="M5.2 16.5h1.2l1.6-1.3v4.6l-1.6-1.3H5.2v-2z" fill="#94e2d5"/>
+  <path d="M9.5 16a2 2 0 0 1 0 2.5" stroke="#94e2d5" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+  <!-- Bottom Right: Sliders Tile -->
+  <rect x="13" y="13" width="8.5" height="8.5" rx="3" fill="#313244"/>
+  <circle cx="15.8" cy="15.8" r="1.4" fill="#fab387"/>
+  <line x1="18" y1="15.8" x2="20" y2="15.8" stroke="#fab387" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="18.8" cy="18.8" r="1.4" fill="#f9e2af"/>
+  <line x1="14.5" y1="18.8" x2="16.5" y2="18.8" stroke="#f9e2af" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

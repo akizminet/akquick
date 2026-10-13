@@ -66,7 +66,9 @@ impl QuickSettingsWindow {
         let t_state_done = std::time::Instant::now();
 
         // Update cached status immediately for IPC socket queries
-        let init_status = crate::status::FullStatus::from_components(&(&state.network).into(), &state.audio, &state.bluetooth);
+        let init_cpu = crate::services::TelemetryService::fetch_cpu();
+        let (init_ram, _) = crate::services::TelemetryService::fetch_ram();
+        let init_status = crate::status::FullStatus::from_components(&(&state.network).into(), &state.audio, &state.bluetooth, init_cpu, init_ram);
         crate::ipc::update_cached_status(init_status);
 
         // Communication channel between Tokio async runtime and GTK main thread
@@ -279,7 +281,7 @@ impl QuickSettingsWindow {
             while let Ok(data) = rx.try_recv() {
                 match data {
                     AppUpdate::Status { mpris, network, audio, bluetooth, cpu_percent, ram_used_gib, ram_total_gib } => {
-                        let full_status = crate::status::FullStatus::from_components(&network, &audio, &bluetooth);
+                        let full_status = crate::status::FullStatus::from_components(&network, &audio, &bluetooth, cpu_percent, ram_used_gib);
                         crate::ipc::update_cached_status(full_status);
                         mpris_card.update(&mpris);
                         toggles_card.update_network(&network);
