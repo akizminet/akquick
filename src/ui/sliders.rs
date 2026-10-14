@@ -678,9 +678,12 @@ impl SlidersSection {
             display_overlay_content.append(&display_pct);
 
             let disp_pct_clone = display_pct.clone();
+            let disp_name = disp.name.clone();
             display_scale.connect_value_changed(move |s| {
                 let val = s.value();
-                disp_pct_clone.set_label(&format!("{}%", val.round() as u32));
+                let pct = val.round() as u32;
+                disp_pct_clone.set_label(&format!("{}%", pct));
+                crate::services::DisplayService::set_brightness(&disp_name, pct);
             });
 
             display_overlay.set_child(Some(&display_scale));

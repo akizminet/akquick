@@ -11,8 +11,8 @@ pub struct DisplayService;
 impl DisplayService {
     pub fn fetch() -> Vec<MonitorDisplay> {
         let monitors = crate::translators::hyprland::get_monitors();
-        if !monitors.is_empty() {
-            return monitors
+        let mon_data: Vec<(String, String)> = if !monitors.is_empty() {
+            monitors
                 .into_iter()
                 .map(|m| {
                     let label = if m.width >= 2560 && m.height >= 1440 {
@@ -22,27 +22,36 @@ impl DisplayService {
                     } else {
                         format!("Display ({})", m.name)
                     };
-                    MonitorDisplay {
-                        name: m.name,
-                        label,
-                        brightness_percent: 85,
-                    }
+                    (m.name, label)
                 })
-                .collect();
-        }
+                .collect()
+        } else {
+            // Fallback to user's dual 2K setup
+            vec![
+                ("DP-1".to_string(), "LG 2K QHD (DP-1)".to_string()),
+                ("HDMI-A-2".to_string(), "LG 2K QHD (HDMI-A-2)".to_string()),
+            ]
+        };
 
-        // Fallback to user's dual 2K setup
-        vec![
-            MonitorDisplay {
-                name: "DP-1".to_string(),
-                label: "LG 2K QHD (DP-1)".to_string(),
-                brightness_percent: 85,
-            },
-            MonitorDisplay {
-                name: "HDMI-A-2".to_string(),
-                label: "LG 2K QHD (HDMI-A-2)".to_string(),
-                brightness_percent: 85,
-            },
-        ]
+        // Query brightness concurrently in parallel threads to minimize latency
+        std::thread::scope(|s| {
+            let mut handles = Vec::new();
+            for (name, label) in mon_data {
+                let handle = s.spawn(move || {
+                    let b = crate::translators::ddc::get_monitor_brightness(&name).unwrap_or(85);
+                    MonitorDisplay {
+                        name,
+                        label,
+                        brightness_percent: b,
+                    }
+                });
+                handles.push(handle);
+            }
+            handles.into_iter().filter_map(|h| h.join().ok()).collect()
+        })
+    }
+
+    pub fn set_brightness(name: &str, percent: u32) {
+        crate::translators::ddc::set_monitor_brightness(name, percent);
     }
 }
