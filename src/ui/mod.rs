@@ -116,6 +116,16 @@ impl QuickSettingsWindow {
         let sliders = std::rc::Rc::new(sliders::SlidersSection::new(&state));
         main_card.append(&sliders.widget);
 
+        let toggles_mic = toggles.clone();
+        sliders.set_on_mic_mute(move |muted| {
+            toggles_mic.set_mic_muted_ui(muted);
+        });
+
+        let sliders_mic = sliders.clone();
+        toggles.set_on_mic_mute(move |muted| {
+            sliders_mic.set_mic_muted_ui(muted);
+        });
+
         let mpris = std::rc::Rc::new(mpris::MprisCard::new(&state));
         main_card.append(&mpris.widget);
 
@@ -277,7 +287,8 @@ impl QuickSettingsWindow {
         let mut last_ssid = state.network.wifi_ssid.clone();
         let mut ticker_count: u32 = 0;
 
-        glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
+        // Fast-drain receiver ticker (every 50ms) to deliver updates with minimal latency and prevent stale buffered snapshots
+        glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
             while let Ok(data) = rx.try_recv() {
                 match data {
                     AppUpdate::Status { mpris, network, audio, bluetooth, cpu_percent, ram_used_gib, ram_total_gib } => {
@@ -305,9 +316,14 @@ impl QuickSettingsWindow {
                     }
                 }
             }
+            glib::ControlFlow::Continue
+        });
 
+        // Background polling ticker (every 500ms) for MPRIS + Network & VPN + Audio + Battery & CPU
+        let tx_poll = poll_tx.clone();
+        glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
             ticker_count += 1;
-            let tx = tx_fetch.clone();
+            let tx = tx_poll.clone();
             let is_wifi_open = stack_poll.visible_child_name().as_deref() == Some("wifi");
             let should_refresh_wifi = is_wifi_open && (ticker_count % 8 == 0);
 

@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::LazyLock;
 use std::thread;
@@ -5,12 +6,36 @@ use std::thread;
 use crate::translators::pulse::PulseAudioClient;
 
 enum AudioCommand {
-    SetSinkVolume(u32),
-    SetSourceVolume(u32),
-    ToggleSinkMute,
-    ToggleSourceMute,
-    UnmuteSink,
-    UnmuteSource,
+    SetSinkVolume(u32, u64),
+    SetSourceVolume(u32, u64),
+    SetSinkMute(bool, u64),
+    SetSourceMute(bool, u64),
+    ToggleSinkMute(u64),
+    ToggleSourceMute(u64),
+}
+
+static START_INSTANT: LazyLock<std::time::Instant> = LazyLock::new(std::time::Instant::now);
+
+fn now_ms() -> u64 {
+    START_INSTANT.elapsed().as_millis() as u64
+}
+
+static DISPATCHED_SINK_SEQ: AtomicU64 = AtomicU64::new(0);
+static APPLIED_SINK_SEQ: AtomicU64 = AtomicU64::new(0);
+static LAST_SINK_CMD_MS: AtomicU64 = AtomicU64::new(0);
+
+static DISPATCHED_SOURCE_SEQ: AtomicU64 = AtomicU64::new(0);
+static APPLIED_SOURCE_SEQ: AtomicU64 = AtomicU64::new(0);
+static LAST_SOURCE_CMD_MS: AtomicU64 = AtomicU64::new(0);
+
+fn next_sink_seq() -> u64 {
+    LAST_SINK_CMD_MS.store(now_ms(), Ordering::Release);
+    DISPATCHED_SINK_SEQ.fetch_add(1, Ordering::SeqCst) + 1
+}
+
+fn next_source_seq() -> u64 {
+    LAST_SOURCE_CMD_MS.store(now_ms(), Ordering::Release);
+    DISPATCHED_SOURCE_SEQ.fetch_add(1, Ordering::SeqCst) + 1
 }
 
 static AUDIO_CMD_TX: LazyLock<Sender<AudioCommand>> = LazyLock::new(|| {
@@ -28,49 +53,49 @@ static AUDIO_CMD_TX: LazyLock<Sender<AudioCommand>> = LazyLock::new(|| {
 
                 let mut latest_sink_vol = None;
                 let mut latest_source_vol = None;
+                let mut latest_sink_mute = None;
+                let mut latest_source_mute = None;
                 let mut pending_toggle_sink_mute = 0;
                 let mut pending_toggle_source_mute = 0;
-                let mut unmute_sink = false;
-                let mut unmute_source = false;
+                let mut target_sink_seq = 0;
+                let mut target_source_seq = 0;
 
-                let apply_cmd = |c: AudioCommand,
-                                 l_sink: &mut Option<u32>,
-                                 l_src: &mut Option<u32>,
-                                 t_sink: &mut usize,
-                                 t_src: &mut usize,
-                                 u_sink: &mut bool,
-                                 u_src: &mut bool| {
+                let mut apply_cmd = |c: AudioCommand| {
                     match c {
-                        AudioCommand::SetSinkVolume(v) => *l_sink = Some(v),
-                        AudioCommand::SetSourceVolume(v) => *l_src = Some(v),
-                        AudioCommand::ToggleSinkMute => *t_sink += 1,
-                        AudioCommand::ToggleSourceMute => *t_src += 1,
-                        AudioCommand::UnmuteSink => *u_sink = true,
-                        AudioCommand::UnmuteSource => *u_src = true,
+                        AudioCommand::SetSinkVolume(v, seq) => {
+                            latest_sink_vol = Some(v);
+                            target_sink_seq = target_sink_seq.max(seq);
+                        }
+                        AudioCommand::SetSourceVolume(v, seq) => {
+                            latest_source_vol = Some(v);
+                            target_source_seq = target_source_seq.max(seq);
+                        }
+                        AudioCommand::SetSinkMute(m, seq) => {
+                            latest_sink_mute = Some(m);
+                            pending_toggle_sink_mute = 0;
+                            target_sink_seq = target_sink_seq.max(seq);
+                        }
+                        AudioCommand::SetSourceMute(m, seq) => {
+                            latest_source_mute = Some(m);
+                            pending_toggle_source_mute = 0;
+                            target_source_seq = target_source_seq.max(seq);
+                        }
+                        AudioCommand::ToggleSinkMute(seq) => {
+                            pending_toggle_sink_mute += 1;
+                            target_sink_seq = target_sink_seq.max(seq);
+                        }
+                        AudioCommand::ToggleSourceMute(seq) => {
+                            pending_toggle_source_mute += 1;
+                            target_source_seq = target_source_seq.max(seq);
+                        }
                     }
                 };
 
-                apply_cmd(
-                    cmd,
-                    &mut latest_sink_vol,
-                    &mut latest_source_vol,
-                    &mut pending_toggle_sink_mute,
-                    &mut pending_toggle_source_mute,
-                    &mut unmute_sink,
-                    &mut unmute_source,
-                );
+                apply_cmd(cmd);
 
                 // Drain coalescing queue to collapse rapid scroll wheel ticks
                 while let Ok(next) = rx.try_recv() {
-                    apply_cmd(
-                        next,
-                        &mut latest_sink_vol,
-                        &mut latest_source_vol,
-                        &mut pending_toggle_sink_mute,
-                        &mut pending_toggle_source_mute,
-                        &mut unmute_sink,
-                        &mut unmute_source,
-                    );
+                    apply_cmd(next);
                 }
 
                 if let Some(client) = client_opt.as_mut() {
@@ -78,8 +103,8 @@ static AUDIO_CMD_TX: LazyLock<Sender<AudioCommand>> = LazyLock::new(|| {
                         let _ = client.set_sink_volume(vol);
                     }
 
-                    if unmute_sink {
-                        let _ = client.set_sink_mute(false);
+                    if let Some(mute) = latest_sink_mute {
+                        let _ = client.set_sink_mute(mute);
                     } else if pending_toggle_sink_mute % 2 != 0 {
                         if let Ok((_, _, _, muted)) = client.get_sink_info() {
                             let _ = client.set_sink_mute(!muted);
@@ -90,8 +115,8 @@ static AUDIO_CMD_TX: LazyLock<Sender<AudioCommand>> = LazyLock::new(|| {
                         let _ = client.set_source_volume(vol);
                     }
 
-                    if unmute_source {
-                        let _ = client.set_source_mute(false);
+                    if let Some(mute) = latest_source_mute {
+                        let _ = client.set_source_mute(mute);
                     } else if pending_toggle_source_mute % 2 != 0 {
                         if let Ok((_, _, _, muted)) = client.get_source_info() {
                             let _ = client.set_source_mute(!muted);
@@ -100,6 +125,13 @@ static AUDIO_CMD_TX: LazyLock<Sender<AudioCommand>> = LazyLock::new(|| {
                 } else {
                     // Try reconnecting next time
                     client_opt = None;
+                }
+
+                if target_sink_seq > 0 {
+                    APPLIED_SINK_SEQ.fetch_max(target_sink_seq, Ordering::SeqCst);
+                }
+                if target_source_seq > 0 {
+                    APPLIED_SOURCE_SEQ.fetch_max(target_source_seq, Ordering::SeqCst);
                 }
             }
         })
@@ -118,6 +150,8 @@ pub struct AudioState {
     pub mic_muted: bool,
     pub source_name: String,
     pub source_desc: String,
+    pub sink_seq: u64,
+    pub source_seq: u64,
 }
 
 pub struct AudioService;
@@ -149,7 +183,11 @@ impl AudioService {
     }
 
     pub fn fetch() -> AudioState {
-        let mut state = AudioState::default();
+        let mut state = AudioState {
+            sink_seq: APPLIED_SINK_SEQ.load(Ordering::Acquire),
+            source_seq: APPLIED_SOURCE_SEQ.load(Ordering::Acquire),
+            ..AudioState::default()
+        };
 
         if let Ok(mut client) = PulseAudioClient::connect() {
             if let Ok((name, desc, vol, muted)) = client.get_sink_info() {
@@ -181,27 +219,67 @@ impl AudioService {
         state
     }
 
-    pub fn set_volume(percent: u32) {
-        let _ = AUDIO_CMD_TX.send(AudioCommand::SetSinkVolume(percent));
+    pub fn is_sink_poll_fresh(poll_seq: u64) -> bool {
+        let dispatched = DISPATCHED_SINK_SEQ.load(Ordering::Acquire);
+        if poll_seq < dispatched {
+            return false;
+        }
+        let last_cmd = LAST_SINK_CMD_MS.load(Ordering::Acquire);
+        if last_cmd > 0 && now_ms().saturating_sub(last_cmd) < 400 {
+            return false;
+        }
+        true
     }
 
+    pub fn is_source_poll_fresh(poll_seq: u64) -> bool {
+        let dispatched = DISPATCHED_SOURCE_SEQ.load(Ordering::Acquire);
+        if poll_seq < dispatched {
+            return false;
+        }
+        let last_cmd = LAST_SOURCE_CMD_MS.load(Ordering::Acquire);
+        if last_cmd > 0 && now_ms().saturating_sub(last_cmd) < 400 {
+            return false;
+        }
+        true
+    }
+
+    pub fn set_volume(percent: u32) {
+        let seq = next_sink_seq();
+        let _ = AUDIO_CMD_TX.send(AudioCommand::SetSinkVolume(percent, seq));
+    }
+
+    pub fn set_volume_mute(muted: bool) {
+        let seq = next_sink_seq();
+        let _ = AUDIO_CMD_TX.send(AudioCommand::SetSinkMute(muted, seq));
+    }
+
+    #[allow(dead_code)]
     pub fn unmute_volume() {
-        let _ = AUDIO_CMD_TX.send(AudioCommand::UnmuteSink);
+        Self::set_volume_mute(false);
     }
 
     pub fn toggle_volume_mute() {
-        let _ = AUDIO_CMD_TX.send(AudioCommand::ToggleSinkMute);
+        let seq = next_sink_seq();
+        let _ = AUDIO_CMD_TX.send(AudioCommand::ToggleSinkMute(seq));
     }
 
     pub fn set_mic_volume(percent: u32) {
-        let _ = AUDIO_CMD_TX.send(AudioCommand::SetSourceVolume(percent));
+        let seq = next_source_seq();
+        let _ = AUDIO_CMD_TX.send(AudioCommand::SetSourceVolume(percent, seq));
     }
 
+    pub fn set_mic_mute(muted: bool) {
+        let seq = next_source_seq();
+        let _ = AUDIO_CMD_TX.send(AudioCommand::SetSourceMute(muted, seq));
+    }
+
+    #[allow(dead_code)]
     pub fn unmute_mic() {
-        let _ = AUDIO_CMD_TX.send(AudioCommand::UnmuteSource);
+        Self::set_mic_mute(false);
     }
 
     pub fn toggle_mic_mute() {
-        let _ = AUDIO_CMD_TX.send(AudioCommand::ToggleSourceMute);
+        let seq = next_source_seq();
+        let _ = AUDIO_CMD_TX.send(AudioCommand::ToggleSourceMute(seq));
     }
 }

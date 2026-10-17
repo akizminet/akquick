@@ -23,6 +23,7 @@ pub struct SlidersSection {
     is_mic_dragging: std::rc::Rc<std::cell::Cell<bool>>,
     last_out_touch: std::rc::Rc<std::cell::Cell<std::time::Instant>>,
     last_mic_touch: std::rc::Rc<std::cell::Cell<std::time::Instant>>,
+    on_mic_mute: std::rc::Rc<std::cell::RefCell<Option<Box<dyn Fn(bool)>>>>,
 }
 
 impl SlidersSection {
@@ -33,6 +34,8 @@ impl SlidersSection {
         let past = std::time::Instant::now() - std::time::Duration::from_secs(10);
         let last_out_touch = std::rc::Rc::new(std::cell::Cell::new(past));
         let last_mic_touch = std::rc::Rc::new(std::cell::Cell::new(past));
+        let on_mic_mute: std::rc::Rc<std::cell::RefCell<Option<Box<dyn Fn(bool)>>>> =
+            std::rc::Rc::new(std::cell::RefCell::new(None));
 
         let tray = gtk4::Box::builder()
             .orientation(gtk4::Orientation::Vertical)
@@ -289,10 +292,12 @@ impl SlidersSection {
         let output_icon_clone = output_icon.clone();
         let output_scale_clone = output_scale.clone();
         let output_pct_clone = output_pct.clone();
+        let last_out_touch_mute = last_out_touch.clone();
         output_mute_btn.connect_clicked(move |_| {
+            last_out_touch_mute.set(std::time::Instant::now());
             let next_val = !is_out_muted_clone.get();
             is_out_muted_clone.set(next_val);
-            AudioService::toggle_volume_mute();
+            AudioService::set_volume_mute(next_val);
             if next_val {
                 output_mute_btn_clone.add_css_class("is-muted");
                 output_scale_clone.add_css_class("is-muted");
@@ -461,9 +466,69 @@ impl SlidersSection {
         let is_mic_muted = std::rc::Rc::new(std::cell::Cell::new(state.audio.mic_muted));
         let has_input_device = std::rc::Rc::new(std::cell::Cell::new(state.audio.has_input_device));
 
+        // Separate Circular Quick Mute Button (HTML line 204)
+        let mute_btn = gtk4::Button::builder()
+            .icon_name(if !state.audio.has_input_device {
+                "microphone-disabled-symbolic"
+            } else if state.audio.mic_muted {
+                "microphone-sensitivity-muted-symbolic"
+            } else {
+                "audio-input-microphone-symbolic"
+            })
+            .tooltip_text(if !state.audio.has_input_device {
+                "No Microphone"
+            } else if state.audio.mic_muted {
+                "Unmute Mic"
+            } else {
+                "Quick Mute Mic"
+            })
+            .css_classes(["quick-mute-btn"])
+            .sensitive(state.audio.has_input_device)
+            .build();
+        if state.audio.mic_muted {
+            mute_btn.add_css_class("is-muted");
+        }
+
+        let is_mic_muted_clone = is_mic_muted.clone();
+        let mute_btn_clone = mute_btn.clone();
+        let mic_icon_clone = mic_icon.clone();
+        let mic_scale_clone = mic_scale.clone();
+        let mic_pct_btn_clone = mic_pct.clone();
+        let last_mic_touch_mute = last_mic_touch.clone();
+        let on_mic_mute_btn_clone = on_mic_mute.clone();
+        mute_btn.connect_clicked(move |_| {
+            last_mic_touch_mute.set(std::time::Instant::now());
+            let next_val = !is_mic_muted_clone.get();
+            is_mic_muted_clone.set(next_val);
+            AudioService::set_mic_mute(next_val);
+            if next_val {
+                mute_btn_clone.add_css_class("is-muted");
+                mic_scale_clone.add_css_class("is-muted");
+                mic_pct_btn_clone.add_css_class("is-muted");
+                mic_pct_btn_clone.set_label("Muted");
+                mute_btn_clone.set_icon_name("microphone-sensitivity-muted-symbolic");
+                mute_btn_clone.set_tooltip_text(Some("Unmute Mic"));
+                mic_icon_clone.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
+            } else {
+                mute_btn_clone.remove_css_class("is-muted");
+                mic_scale_clone.remove_css_class("is-muted");
+                mic_pct_btn_clone.remove_css_class("is-muted");
+                let val = mic_scale_clone.value().round() as u32;
+                mic_pct_btn_clone.set_label(&format!("{}%", val));
+                mute_btn_clone.set_icon_name("audio-input-microphone-symbolic");
+                mute_btn_clone.set_tooltip_text(Some("Quick Mute Mic"));
+                mic_icon_clone.set_icon_name(Some("audio-input-microphone-symbolic"));
+            }
+            if let Some(ref cb) = *on_mic_mute_btn_clone.borrow() {
+                cb(next_val);
+            }
+        });
+
         let mic_pct_clone = mic_pct.clone();
         let mic_scale_slider_clone = mic_scale.clone();
         let mic_icon_slider_clone = mic_icon.clone();
+        let mute_btn_scale_clone = mute_btn.clone();
+        let on_mic_mute_scale_clone = on_mic_mute.clone();
         let is_mic_muted_scale = is_mic_muted.clone();
         let is_updating_mic = is_updating.clone();
         let last_mic_touch_val = last_mic_touch.clone();
@@ -481,7 +546,13 @@ impl SlidersSection {
                 mic_scale_slider_clone.remove_css_class("is-muted");
                 mic_pct_clone.remove_css_class("is-muted");
                 mic_icon_slider_clone.set_icon_name(Some("audio-input-microphone-symbolic"));
-                AudioService::unmute_mic();
+                mute_btn_scale_clone.remove_css_class("is-muted");
+                mute_btn_scale_clone.set_icon_name("audio-input-microphone-symbolic");
+                mute_btn_scale_clone.set_tooltip_text(Some("Quick Mute Mic"));
+                AudioService::set_mic_mute(false);
+                if let Some(ref cb) = *on_mic_mute_scale_clone.borrow() {
+                    cb(false);
+                }
             }
         });
 
@@ -560,58 +631,6 @@ impl SlidersSection {
             gtk4::glib::Propagation::Stop
         });
         mic_overlay.add_controller(mic_scroll);
-
-        // Separate Circular Quick Mute Button (HTML line 204)
-        let mute_btn = gtk4::Button::builder()
-            .icon_name(if !state.audio.has_input_device {
-                "microphone-disabled-symbolic"
-            } else if state.audio.mic_muted {
-                "microphone-sensitivity-muted-symbolic"
-            } else {
-                "audio-input-microphone-symbolic"
-            })
-            .tooltip_text(if !state.audio.has_input_device {
-                "No Microphone"
-            } else if state.audio.mic_muted {
-                "Unmute Mic"
-            } else {
-                "Quick Mute Mic"
-            })
-            .css_classes(["quick-mute-btn"])
-            .sensitive(state.audio.has_input_device)
-            .build();
-        if state.audio.mic_muted {
-            mute_btn.add_css_class("is-muted");
-        }
-
-        let is_mic_muted_clone = is_mic_muted.clone();
-        let mute_btn_clone = mute_btn.clone();
-        let mic_icon_clone = mic_icon.clone();
-        let mic_scale_clone = mic_scale.clone();
-        let mic_pct_btn_clone = mic_pct.clone();
-        mute_btn.connect_clicked(move |_| {
-            let next_val = !is_mic_muted_clone.get();
-            is_mic_muted_clone.set(next_val);
-            AudioService::toggle_mic_mute();
-            if next_val {
-                mute_btn_clone.add_css_class("is-muted");
-                mic_scale_clone.add_css_class("is-muted");
-                mic_pct_btn_clone.add_css_class("is-muted");
-                mic_pct_btn_clone.set_label("Muted");
-                mute_btn_clone.set_icon_name("microphone-sensitivity-muted-symbolic");
-                mute_btn_clone.set_tooltip_text(Some("Unmute Mic"));
-                mic_icon_clone.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
-            } else {
-                mute_btn_clone.remove_css_class("is-muted");
-                mic_scale_clone.remove_css_class("is-muted");
-                mic_pct_btn_clone.remove_css_class("is-muted");
-                let val = mic_scale_clone.value().round() as u32;
-                mic_pct_btn_clone.set_label(&format!("{}%", val));
-                mute_btn_clone.set_icon_name("audio-input-microphone-symbolic");
-                mute_btn_clone.set_tooltip_text(Some("Quick Mute Mic"));
-                mic_icon_clone.set_icon_name(Some("audio-input-microphone-symbolic"));
-            }
-        });
 
         mic_row.append(&mic_overlay);
         mic_row.append(&mute_btn);
@@ -775,6 +794,34 @@ impl SlidersSection {
             is_mic_dragging,
             last_out_touch,
             last_mic_touch,
+            on_mic_mute,
+        }
+    }
+
+    pub fn set_on_mic_mute<F: Fn(bool) + 'static>(&self, f: F) {
+        *self.on_mic_mute.borrow_mut() = Some(Box::new(f));
+    }
+
+    pub fn set_mic_muted_ui(&self, muted: bool) {
+        self.last_mic_touch.set(std::time::Instant::now());
+        self.is_mic_muted.set(muted);
+        if muted {
+            self.mic_mute_btn.add_css_class("is-muted");
+            self.mic_scale.add_css_class("is-muted");
+            self.mic_pct.add_css_class("is-muted");
+            self.mic_pct.set_label("Muted");
+            self.mic_mute_btn.set_icon_name("microphone-sensitivity-muted-symbolic");
+            self.mic_mute_btn.set_tooltip_text(Some("Unmute Mic"));
+            self.mic_icon.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
+        } else {
+            self.mic_mute_btn.remove_css_class("is-muted");
+            self.mic_scale.remove_css_class("is-muted");
+            self.mic_pct.remove_css_class("is-muted");
+            let val = self.mic_scale.value().round() as u32;
+            self.mic_pct.set_label(&format!("{}%", val));
+            self.mic_mute_btn.set_icon_name("audio-input-microphone-symbolic");
+            self.mic_mute_btn.set_tooltip_text(Some("Quick Mute Mic"));
+            self.mic_icon.set_icon_name(Some("audio-input-microphone-symbolic"));
         }
     }
 
@@ -786,43 +833,46 @@ impl SlidersSection {
         self.output_desc.set_label(&audio.sink_desc);
         self.output_chip_label.set_label(&audio.sink_desc);
 
-        self.is_out_muted.set(audio.volume_muted);
-        if !self.is_out_dragging.get() && !out_recently_touched {
-            self.is_updating.set(true);
-            self.output_scale.set_value(audio.volume_percent as f64);
-            self.is_updating.set(false);
-        }
-        if audio.volume_muted {
-            self.output_scale.add_css_class("is-muted");
-            self.output_mute_btn.add_css_class("is-muted");
-            self.output_pct.add_css_class("is-muted");
-            self.output_pct.set_label("Muted");
-            self.output_mute_btn.set_icon_name("audio-volume-muted-symbolic");
-            self.output_mute_btn.set_tooltip_text(Some("Unmute Output"));
-            self.output_icon.set_icon_name(Some("audio-volume-muted-symbolic"));
-        } else {
-            self.output_scale.remove_css_class("is-muted");
-            self.output_mute_btn.remove_css_class("is-muted");
-            self.output_pct.remove_css_class("is-muted");
-            self.output_pct.set_label(&format!("{}%", audio.volume_percent));
-            self.output_mute_btn.set_icon_name("audio-volume-high-symbolic");
-            self.output_mute_btn.set_tooltip_text(Some("Mute Output"));
-            let icon_name = if audio.volume_percent > 60 {
-                "audio-volume-high-symbolic"
-            } else if audio.volume_percent > 25 {
-                "audio-volume-medium-symbolic"
+        let sink_fresh = AudioService::is_sink_poll_fresh(audio.sink_seq) && !out_recently_touched;
+        if sink_fresh {
+            self.is_out_muted.set(audio.volume_muted);
+            if !self.is_out_dragging.get() {
+                self.is_updating.set(true);
+                self.output_scale.set_value(audio.volume_percent as f64);
+                self.is_updating.set(false);
+            }
+            if audio.volume_muted {
+                self.output_scale.add_css_class("is-muted");
+                self.output_mute_btn.add_css_class("is-muted");
+                self.output_pct.add_css_class("is-muted");
+                self.output_pct.set_label("Muted");
+                self.output_mute_btn.set_icon_name("audio-volume-muted-symbolic");
+                self.output_mute_btn.set_tooltip_text(Some("Unmute Output"));
+                self.output_icon.set_icon_name(Some("audio-volume-muted-symbolic"));
             } else {
-                "audio-volume-low-symbolic"
-            };
-            self.output_icon.set_icon_name(Some(icon_name));
+                self.output_scale.remove_css_class("is-muted");
+                self.output_mute_btn.remove_css_class("is-muted");
+                self.output_pct.remove_css_class("is-muted");
+                self.output_pct.set_label(&format!("{}%", audio.volume_percent));
+                self.output_mute_btn.set_icon_name("audio-volume-high-symbolic");
+                self.output_mute_btn.set_tooltip_text(Some("Mute Output"));
+                let icon_name = if audio.volume_percent > 60 {
+                    "audio-volume-high-symbolic"
+                } else if audio.volume_percent > 25 {
+                    "audio-volume-medium-symbolic"
+                } else {
+                    "audio-volume-low-symbolic"
+                };
+                self.output_icon.set_icon_name(Some(icon_name));
+            }
         }
 
-        self.is_mic_muted.set(audio.mic_muted);
         self.has_input_device.set(audio.has_input_device);
         self.mic_scale.set_sensitive(audio.has_input_device);
         self.mic_mute_btn.set_sensitive(audio.has_input_device);
 
         if !audio.has_input_device {
+            self.is_mic_muted.set(false);
             self.mic_scale.add_css_class("is-muted");
             self.mic_mute_btn.remove_css_class("is-muted");
             self.mic_pct.add_css_class("is-muted");
@@ -833,29 +883,34 @@ impl SlidersSection {
             self.mic_mute_btn.set_icon_name("microphone-disabled-symbolic");
             self.mic_mute_btn.set_tooltip_text(Some("No Microphone"));
         } else {
-            if !self.is_mic_dragging.get() && !mic_recently_touched {
-                self.is_updating.set(true);
-                self.mic_scale.set_value(audio.mic_percent as f64);
-                self.is_updating.set(false);
-            }
             self.mic_desc.set_label(&audio.source_desc);
             self.mic_chip_label.set_label(&audio.source_desc);
-            if audio.mic_muted {
-                self.mic_scale.add_css_class("is-muted");
-                self.mic_mute_btn.add_css_class("is-muted");
-                self.mic_pct.add_css_class("is-muted");
-                self.mic_pct.set_label("Muted");
-                self.mic_mute_btn.set_icon_name("microphone-sensitivity-muted-symbolic");
-                self.mic_mute_btn.set_tooltip_text(Some("Unmute Mic"));
-                self.mic_icon.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
-            } else {
-                self.mic_scale.remove_css_class("is-muted");
-                self.mic_mute_btn.remove_css_class("is-muted");
-                self.mic_pct.remove_css_class("is-muted");
-                self.mic_pct.set_label(&format!("{}%", audio.mic_percent));
-                self.mic_mute_btn.set_icon_name("audio-input-microphone-symbolic");
-                self.mic_mute_btn.set_tooltip_text(Some("Quick Mute Mic"));
-                self.mic_icon.set_icon_name(Some("audio-input-microphone-symbolic"));
+
+            let source_fresh = AudioService::is_source_poll_fresh(audio.source_seq) && !mic_recently_touched;
+            if source_fresh {
+                self.is_mic_muted.set(audio.mic_muted);
+                if !self.is_mic_dragging.get() {
+                    self.is_updating.set(true);
+                    self.mic_scale.set_value(audio.mic_percent as f64);
+                    self.is_updating.set(false);
+                }
+                if audio.mic_muted {
+                    self.mic_scale.add_css_class("is-muted");
+                    self.mic_mute_btn.add_css_class("is-muted");
+                    self.mic_pct.add_css_class("is-muted");
+                    self.mic_pct.set_label("Muted");
+                    self.mic_mute_btn.set_icon_name("microphone-sensitivity-muted-symbolic");
+                    self.mic_mute_btn.set_tooltip_text(Some("Unmute Mic"));
+                    self.mic_icon.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
+                } else {
+                    self.mic_scale.remove_css_class("is-muted");
+                    self.mic_mute_btn.remove_css_class("is-muted");
+                    self.mic_pct.remove_css_class("is-muted");
+                    self.mic_pct.set_label(&format!("{}%", audio.mic_percent));
+                    self.mic_mute_btn.set_icon_name("audio-input-microphone-symbolic");
+                    self.mic_mute_btn.set_tooltip_text(Some("Quick Mute Mic"));
+                    self.mic_icon.set_icon_name(Some("audio-input-microphone-symbolic"));
+                }
             }
         }
     }

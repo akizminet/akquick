@@ -24,6 +24,7 @@ pub struct ToggleGrid {
     pub mic_icon: gtk4::Image,
     pub is_mic_muted: Rc<Cell<bool>>,
     pub has_mic_input: Rc<Cell<bool>>,
+    pub on_mic_mute: Rc<std::cell::RefCell<Option<Box<dyn Fn(bool)>>>>,
 }
 
 impl ToggleGrid {
@@ -38,6 +39,9 @@ impl ToggleGrid {
         FB: Fn() + 'static,
         FV: Fn() + 'static,
     {
+        let on_mic_mute: Rc<std::cell::RefCell<Option<Box<dyn Fn(bool)>>>> =
+            Rc::new(std::cell::RefCell::new(None));
+
         let grid = gtk4::Grid::builder()
             .column_spacing(10)
             .row_spacing(10)
@@ -211,13 +215,14 @@ impl ToggleGrid {
         let mic_pill_clone = mic_pill.clone();
         let mic_icon_clone = mic_icon.clone();
         let mic_sub_clone = mic_sub.clone();
+        let on_mic_mute_clone = on_mic_mute.clone();
         mic_pill.connect_clicked(move |_| {
             if !has_input_clone.get() {
                 return;
             }
             let next_muted = !is_mic_muted_clone.get();
             is_mic_muted_clone.set(next_muted);
-            AudioService::toggle_mic_mute();
+            AudioService::set_mic_mute(next_muted);
             if next_muted {
                 mic_pill_clone.remove_css_class("active-secondary");
                 mic_pill_clone.add_css_class("is-muted");
@@ -228,6 +233,9 @@ impl ToggleGrid {
                 mic_pill_clone.remove_css_class("is-muted");
                 mic_icon_clone.set_icon_name(Some("audio-input-microphone-symbolic"));
                 mic_sub_clone.set_label("● Unmuted");
+            }
+            if let Some(ref cb) = *on_mic_mute_clone.borrow() {
+                cb(next_muted);
             }
         });
 
@@ -307,6 +315,31 @@ impl ToggleGrid {
             mic_icon,
             is_mic_muted,
             has_mic_input: has_input,
+            on_mic_mute,
+        }
+    }
+
+    pub fn set_on_mic_mute<F: Fn(bool) + 'static>(&self, f: F) {
+        *self.on_mic_mute.borrow_mut() = Some(Box::new(f));
+    }
+
+    pub fn set_mic_muted_ui(&self, muted: bool) {
+        self.is_mic_muted.set(muted);
+        if !self.has_mic_input.get() {
+            self.mic_box.remove_css_class("active-secondary");
+            self.mic_box.remove_css_class("is-muted");
+            self.mic_icon.set_icon_name(Some("microphone-disabled-symbolic"));
+            self.mic_sub.set_label("● No Input");
+        } else if muted {
+            self.mic_box.remove_css_class("active-secondary");
+            self.mic_box.add_css_class("is-muted");
+            self.mic_icon.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
+            self.mic_sub.set_label("● Muted");
+        } else {
+            self.mic_box.add_css_class("active-secondary");
+            self.mic_box.remove_css_class("is-muted");
+            self.mic_icon.set_icon_name(Some("audio-input-microphone-symbolic"));
+            self.mic_sub.set_label("● Unmuted");
         }
     }
 
@@ -350,23 +383,28 @@ impl ToggleGrid {
     }
 
     pub fn update_audio(&self, audio: &crate::services::AudioState) {
-        self.is_mic_muted.set(audio.mic_muted);
         self.has_mic_input.set(audio.has_input_device);
         if !audio.has_input_device {
+            self.is_mic_muted.set(false);
             self.mic_box.remove_css_class("active-secondary");
             self.mic_box.remove_css_class("is-muted");
             self.mic_icon.set_icon_name(Some("microphone-disabled-symbolic"));
             self.mic_sub.set_label("● No Input");
-        } else if audio.mic_muted {
-            self.mic_box.remove_css_class("active-secondary");
-            self.mic_box.add_css_class("is-muted");
-            self.mic_icon.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
-            self.mic_sub.set_label("● Muted");
         } else {
-            self.mic_box.add_css_class("active-secondary");
-            self.mic_box.remove_css_class("is-muted");
-            self.mic_icon.set_icon_name(Some("audio-input-microphone-symbolic"));
-            self.mic_sub.set_label("● Unmuted");
+            if AudioService::is_source_poll_fresh(audio.source_seq) {
+                self.is_mic_muted.set(audio.mic_muted);
+                if audio.mic_muted {
+                    self.mic_box.remove_css_class("active-secondary");
+                    self.mic_box.add_css_class("is-muted");
+                    self.mic_icon.set_icon_name(Some("microphone-sensitivity-muted-symbolic"));
+                    self.mic_sub.set_label("● Muted");
+                } else {
+                    self.mic_box.add_css_class("active-secondary");
+                    self.mic_box.remove_css_class("is-muted");
+                    self.mic_icon.set_icon_name(Some("audio-input-microphone-symbolic"));
+                    self.mic_sub.set_label("● Unmuted");
+                }
+            }
         }
     }
 
